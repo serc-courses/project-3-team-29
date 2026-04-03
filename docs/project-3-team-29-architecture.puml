@@ -1,0 +1,124 @@
+@startuml
+title project-3-team-29 - Architecture Overview
+
+skinparam componentStyle rectangle
+skinparam packageStyle rectangle
+left to right direction
+
+actor Client
+
+package "com.iiit.oms" {
+  component "OmsApplication" as OmsApplication
+
+  package "interfaces" {
+    component "OrderRestServer\n- /orders/plan\n- /orders\n- /orders/status\n- /orders/confirm\n- /orders/book" as OrderRestServer
+  }
+
+  package "processor" {
+    component "OrderScheduler" as OrderScheduler
+    component "BatchoutScheduler" as BatchoutScheduler
+    component "OrderStateMachine" as OrderStateMachine
+    component "OrderManager" as OrderManager
+  }
+
+  package "repository" {
+    interface "OrderRepository" as IOrderRepository
+    interface "BulkOrderRepository" as IBulkOrderRepository
+    interface "BulkOrderMappingRepository" as IBulkOrderMappingRepository
+    interface "FundRepository" as IFundRepository
+    interface "AccountRepository" as IAccountRepository
+
+    component "postgres.*\nimplementations" as PostgresRepos
+    component "inmemory.*\nimplementations" as InMemoryRepos
+  }
+
+  package "model" {
+    component "Order" as ModelOrder
+    component "BulkOrder" as ModelBulkOrder
+    component "Fund" as ModelFund
+    component "Account" as ModelAccount
+    component "OrderStatus" as ModelOrderStatus
+    component "BulkOrderStatus" as ModelBulkOrderStatus
+    component "OrderSide" as ModelOrderSide
+  }
+
+  package "db.postgres" {
+    component "PostgresOrderDatabase" as PostgresOrderDb
+    component "PostgresBulkOrderDatabase" as PostgresBulkDb
+    component "PostgresBulkOrderMappingDatabase" as PostgresMapDb
+    component "PostgresFundDatabase" as PostgresFundDb
+    component "PostgresAccountDatabase" as PostgresAccountDb
+  }
+
+  package "db.util" {
+    component "PostgresConnectionFactory" as ConnFactory
+    component "PostgresSchemaInitializer" as SchemaInit
+  }
+}
+
+Client --> OrderRestServer : HTTP
+OmsApplication --> OrderRestServer : create/start
+OmsApplication --> OrderScheduler : startPolling()
+OmsApplication --> BatchoutScheduler : startBatchout()
+OmsApplication --> SchemaInit : initialize()
+SchemaInit --> ConnFactory
+
+OrderRestServer --> IOrderRepository
+OrderRestServer --> IBulkOrderRepository
+OrderRestServer --> IBulkOrderMappingRepository
+OrderRestServer --> IFundRepository
+OrderRestServer --> OrderStateMachine
+
+OrderScheduler --> IOrderRepository
+OrderScheduler --> OrderStateMachine
+OrderStateMachine --> OrderManager
+OrderManager --> IAccountRepository
+OrderManager --> IFundRepository
+
+BatchoutScheduler --> IOrderRepository
+BatchoutScheduler --> IBulkOrderRepository
+BatchoutScheduler --> IBulkOrderMappingRepository
+
+PostgresRepos ..|> IOrderRepository
+PostgresRepos ..|> IBulkOrderRepository
+PostgresRepos ..|> IBulkOrderMappingRepository
+PostgresRepos ..|> IFundRepository
+PostgresRepos ..|> IAccountRepository
+
+InMemoryRepos ..|> IOrderRepository
+InMemoryRepos ..|> IBulkOrderRepository
+InMemoryRepos ..|> IBulkOrderMappingRepository
+InMemoryRepos ..|> IFundRepository
+InMemoryRepos ..|> IAccountRepository
+
+PostgresRepos --> PostgresOrderDb
+PostgresRepos --> PostgresBulkDb
+PostgresRepos --> PostgresMapDb
+PostgresRepos --> PostgresFundDb
+PostgresRepos --> PostgresAccountDb
+
+IOrderRepository --> ModelOrder
+IBulkOrderRepository --> ModelBulkOrder
+IFundRepository --> ModelFund
+IAccountRepository --> ModelAccount
+
+@enduml
+
+@startuml
+title Order Lifecycle (High-Level)
+
+[*] --> PLANNED
+PLANNED --> VALIDATED : OrderStateMachine
+VALIDATED --> ENRICHED : OrderStateMachine
+ENRICHED --> PLACED : OrderStateMachine
+PLACED --> BULKED : BatchoutScheduler
+BULKED --> CONFIRMED : /orders/confirm
+CONFIRMED --> BOOKED : /orders/book
+
+PLANNED --> ERRORED
+VALIDATED --> ERRORED
+ENRICHED --> ERRORED
+BULKED --> ERRORED
+CONFIRMED --> ERRORED
+
+@enduml

@@ -81,7 +81,7 @@ public class OrderStateMachine {
                     order.setOrderStatus(OrderStatus.CONFIRMED);
                     break;
                 case CONFIRMED:
-                    LOGGER.info("Executing CONFIRMED->CONTRACTED transition for order: " + order.getOrderID());
+                    LOGGER.info("Executing CONFIRMED->BOOKED transition for order: " + order.getOrderID());
                     orderManager.contract(order);
                     order.setOrderStatus(OrderStatus.BOOKED);
                     break;
