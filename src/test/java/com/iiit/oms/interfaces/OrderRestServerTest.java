@@ -415,6 +415,103 @@ class OrderRestServerTest {
         }
     }
 
+    @Test
+    void shouldExposeAccountAndFundAggregates() throws Exception {
+        InMemoryOrderDatabase orderDatabase = new InMemoryOrderDatabase();
+        InMemoryFundDatabase fundDatabase = new InMemoryFundDatabase();
+
+        OrderRepository orderRepository = new InMemoryOrderRepository(orderDatabase);
+        FundRepository fundRepository = new InMemoryFundRepository(fundDatabase);
+        fundRepository.save(new Fund("FND001", "Fund 1", "Family", BigDecimal.TEN));
+        fundRepository.save(new Fund("FND002", "Fund 2", "Family", BigDecimal.valueOf(20)));
+
+        ProjectionStore projectionStore = new InMemoryProjectionStore();
+        OrderProjectionListener projectionListener = new DefaultOrderProjectionListener(projectionStore);
+
+        OrderRestServer server = new OrderRestServer(
+                0,
+                orderRepository,
+                null,
+                null,
+                fundRepository,
+                null,
+                projectionStore,
+                projectionListener
+        );
+        server.start();
+
+        try {
+            String payload = "["
+                    + "{\"orderID\":\"ORD920\",\"productID\":\"FND001\",\"amount\":100,\"accountID\":\"ACCT00001\",\"orderSide\":\"BUY\"},"
+                    + "{\"orderID\":\"ORD921\",\"productID\":\"FND002\",\"amount\":200,\"accountID\":\"ACCT00002\",\"orderSide\":\"SELL\"}"
+                    + "]";
+            HttpResponse<String> postResponse = postJson(server.getPort(), payload);
+            assertEquals(201, postResponse.statusCode());
+
+            HttpResponse<String> accountAgg = getAccountAggregates(server.getPort());
+            assertEquals(200, accountAgg.statusCode());
+            assertTrue(accountAgg.body().contains("ACCT00001"));
+            assertTrue(accountAgg.body().contains("ACCT00002"));
+
+            HttpResponse<String> fundAgg = getFundAggregates(server.getPort());
+            assertEquals(200, fundAgg.statusCode());
+            assertTrue(fundAgg.body().contains("FND001"));
+            assertTrue(fundAgg.body().contains("FND002"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void shouldReplayViewsFromWriteSide() throws Exception {
+        InMemoryOrderDatabase orderDatabase = new InMemoryOrderDatabase();
+        InMemoryBulkOrderDatabase bulkOrderDatabase = new InMemoryBulkOrderDatabase();
+        InMemoryBulkOrderMappingDatabase mappingDatabase = new InMemoryBulkOrderMappingDatabase();
+        InMemoryFundDatabase fundDatabase = new InMemoryFundDatabase();
+
+        OrderRepository orderRepository = new InMemoryOrderRepository(orderDatabase);
+        BulkOrderRepository bulkOrderRepository = new InMemoryBulkOrderRepository(bulkOrderDatabase);
+        BulkOrderMappingRepository mappingRepository = new InMemoryBulkOrderMappingRepository(mappingDatabase);
+        FundRepository fundRepository = new InMemoryFundRepository(fundDatabase);
+        fundRepository.save(new Fund("FND001", "Fund 1", "Family", BigDecimal.TEN));
+
+        orderRepository.save(new Order("ORD930", "FND001", BigDecimal.ONE, BigDecimal.valueOf(10), "ACCT00001", OrderSide.BUY, OrderStatus.BOOKED, true));
+        bulkOrderRepository.save(new BulkOrder("BLK930", "FND001", OrderSide.BUY, BulkOrderStatus.BOOKED, BigDecimal.ONE, BigDecimal.valueOf(10), "FIRMACCT"));
+        mappingRepository.save("BLK930", List.of("ORD930"));
+
+        ProjectionStore projectionStore = new InMemoryProjectionStore();
+        OrderProjectionListener projectionListener = new DefaultOrderProjectionListener(projectionStore);
+
+        OrderRestServer server = new OrderRestServer(
+                0,
+                orderRepository,
+                bulkOrderRepository,
+                mappingRepository,
+                fundRepository,
+                null,
+                projectionStore,
+                projectionListener
+        );
+        server.start();
+
+        try {
+            HttpResponse<String> replayResponse = postReplay(server.getPort());
+            assertEquals(200, replayResponse.statusCode());
+            assertTrue(replayResponse.body().contains("\"projectedOrders\":1"));
+            assertTrue(replayResponse.body().contains("\"projectedBulkOrders\":1"));
+
+            HttpResponse<String> viewOrders = getViewOrders(server.getPort());
+            assertEquals(200, viewOrders.statusCode());
+            assertTrue(viewOrders.body().contains("ORD930"));
+
+            HttpResponse<String> viewBulkOrders = getViewBulkOrders(server.getPort());
+            assertEquals(200, viewBulkOrders.statusCode());
+            assertTrue(viewBulkOrders.body().contains("BLK930"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private HttpResponse<String> postJson(int port, String payload) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
@@ -523,6 +620,47 @@ class OrderRestServerTest {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(new URI("http://localhost:" + port + "/view/ui"))
                 .GET()
+                .build();
+
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> getViewBulkOrders(int port) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/view/bulk-orders"))
+                .GET()
+                .build();
+
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> getAccountAggregates(int port) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/view/aggregates/accounts"))
+                .GET()
+                .build();
+
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> getFundAggregates(int port) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/view/aggregates/funds"))
+                .GET()
+                .build();
+
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> postReplay(int port) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/view/replay"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{}"))
                 .build();
 
         return client.send(request, HttpResponse.BodyHandlers.ofString());

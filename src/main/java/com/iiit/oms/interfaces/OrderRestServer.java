@@ -52,6 +52,9 @@ public class OrderRestServer {
     private static final String VIEW_ORDERS_PATH = "/view/orders";
     private static final String VIEW_BULK_ORDERS_PATH = "/view/bulk-orders";
     private static final String VIEW_DASHBOARD_PATH = "/view/dashboard";
+    private static final String VIEW_AGGREGATES_ACCOUNTS_PATH = "/view/aggregates/accounts";
+    private static final String VIEW_AGGREGATES_FUNDS_PATH = "/view/aggregates/funds";
+    private static final String VIEW_REPLAY_PATH = "/view/replay";
     private static final String VIEW_STREAM_PATH = "/view/stream";
     private static final String VIEW_UI_PATH = "/view/ui";
 
@@ -113,6 +116,9 @@ public class OrderRestServer {
         this.httpServer.createContext(VIEW_ORDERS_PATH, new ViewOrdersHandler());
         this.httpServer.createContext(VIEW_BULK_ORDERS_PATH, new ViewBulkOrdersHandler());
         this.httpServer.createContext(VIEW_DASHBOARD_PATH, new ViewDashboardHandler());
+        this.httpServer.createContext(VIEW_AGGREGATES_ACCOUNTS_PATH, new ViewAggregateAccountsHandler());
+        this.httpServer.createContext(VIEW_AGGREGATES_FUNDS_PATH, new ViewAggregateFundsHandler());
+        this.httpServer.createContext(VIEW_REPLAY_PATH, new ViewReplayHandler());
         this.httpServer.createContext(VIEW_STREAM_PATH, new ViewStreamHandler());
         this.httpServer.createContext(VIEW_UI_PATH, new ViewUiHandler());
         this.httpServer.setExecutor(Executors.newFixedThreadPool(12));
@@ -567,6 +573,170 @@ public class OrderRestServer {
             dashboard.put("bulkOrders", bulkOrders);
 
             sendJsonResponse(exchange, 200, dashboard);
+        }
+    }
+
+    private final class ViewAggregateAccountsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only GET is supported"));
+                return;
+            }
+            if (projectionStore == null) {
+                sendJsonResponse(exchange, 500, Map.of("message", "Read model is not configured"));
+                return;
+            }
+
+            List<OrderView> orders = projectionStore.findAllOrderViews();
+            Map<String, List<OrderView>> grouped = orders.stream()
+                    .collect(Collectors.groupingBy(OrderView::getAccountID));
+
+            List<Map<String, Object>> response = grouped.entrySet().stream()
+                    .map(entry -> {
+                        String accountID = entry.getKey();
+                        List<OrderView> accountOrders = entry.getValue();
+                        BigDecimal totalAmount = accountOrders.stream()
+                                .map(OrderView::getAmount)
+                                .filter(Objects::nonNull)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                        BigDecimal totalQuantity = accountOrders.stream()
+                                .map(OrderView::getQuantity)
+                                .filter(Objects::nonNull)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                        Map<String, Long> statusCounts = accountOrders.stream()
+                                .collect(Collectors.groupingBy(OrderView::getOrderStatus, Collectors.counting()));
+
+                        Map<String, Object> row = new HashMap<>();
+                        row.put("accountID", accountID);
+                        row.put("orderCount", accountOrders.size());
+                        row.put("totalAmount", totalAmount);
+                        row.put("totalQuantity", totalQuantity);
+                        row.put("statuses", statusCounts);
+                        return row;
+                    })
+                    .sorted(Comparator.comparing(m -> (String) m.get("accountID")))
+                    .collect(Collectors.toList());
+
+            sendJsonResponse(exchange, 200, response);
+        }
+    }
+
+    private final class ViewAggregateFundsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only GET is supported"));
+                return;
+            }
+            if (projectionStore == null) {
+                sendJsonResponse(exchange, 500, Map.of("message", "Read model is not configured"));
+                return;
+            }
+
+            List<OrderView> orders = projectionStore.findAllOrderViews();
+            Map<String, List<OrderView>> grouped = orders.stream()
+                    .collect(Collectors.groupingBy(OrderView::getFundID));
+
+            List<Map<String, Object>> response = grouped.entrySet().stream()
+                    .map(entry -> {
+                        String fundID = entry.getKey();
+                        List<OrderView> fundOrders = entry.getValue();
+                        BigDecimal totalAmount = fundOrders.stream()
+                                .map(OrderView::getAmount)
+                                .filter(Objects::nonNull)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                        BigDecimal totalQuantity = fundOrders.stream()
+                                .map(OrderView::getQuantity)
+                                .filter(Objects::nonNull)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+                        Map<String, Long> sideCounts = fundOrders.stream()
+                                .collect(Collectors.groupingBy(OrderView::getOrderSide, Collectors.counting()));
+                        String fundName = fundOrders.stream().map(OrderView::getFundName).filter(Objects::nonNull).findFirst().orElse("");
+                        BigDecimal nav = fundOrders.stream().map(OrderView::getNAV).filter(Objects::nonNull).findFirst().orElse(null);
+
+                        Map<String, Object> row = new HashMap<>();
+                        row.put("fundID", fundID);
+                        row.put("fundName", fundName);
+                        row.put("orderCount", fundOrders.size());
+                        row.put("totalAmount", totalAmount);
+                        row.put("totalQuantity", totalQuantity);
+                        row.put("orderSides", sideCounts);
+                        row.put("nav", nav);
+                        return row;
+                    })
+                    .sorted(Comparator.comparing(m -> (String) m.get("fundID")))
+                    .collect(Collectors.toList());
+
+            sendJsonResponse(exchange, 200, response);
+        }
+    }
+
+    private final class ViewReplayHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only POST is supported"));
+                return;
+            }
+            if (projectionStore == null) {
+                sendJsonResponse(exchange, 500, Map.of("message", "Read model is not configured"));
+                return;
+            }
+            if (bulkOrderRepository == null || bulkOrderMappingRepository == null || fundRepository == null) {
+                sendJsonResponse(exchange, 500, Map.of("message", "Replay endpoint is not configured"));
+                return;
+            }
+
+            int projectedOrders = 0;
+            int projectedBulkOrders = 0;
+            int missingOrderFunds = 0;
+            int missingBulkFunds = 0;
+
+            projectionStore.clearAll();
+
+            Map<String, List<String>> mappings = bulkOrderMappingRepository.findAll();
+            Map<String, String> orderToBulkId = new HashMap<>();
+            for (Map.Entry<String, List<String>> mapping : mappings.entrySet()) {
+                for (String orderID : mapping.getValue()) {
+                    orderToBulkId.put(orderID, mapping.getKey());
+                }
+            }
+
+            Map<String, BulkOrder> bulkById = bulkOrderRepository.findAll().stream()
+                    .collect(Collectors.toMap(BulkOrder::getOrderID, bulk -> bulk, (a, b) -> a));
+
+            for (Order order : orderRepository.findAll()) {
+                Optional<Fund> maybeFund = resolveFund(order.getProductID());
+                if (maybeFund.isEmpty()) {
+                    missingOrderFunds++;
+                    continue;
+                }
+                String bulkOrderID = orderToBulkId.get(order.getOrderID());
+                BulkOrder bulkOrder = bulkOrderID == null ? null : bulkById.get(bulkOrderID);
+                projectionStore.projectOrder(order, bulkOrder, maybeFund.get());
+                projectedOrders++;
+            }
+
+            for (BulkOrder bulkOrder : bulkById.values()) {
+                Optional<Fund> maybeFund = resolveFund(bulkOrder.getProductID());
+                if (maybeFund.isEmpty()) {
+                    missingBulkFunds++;
+                    continue;
+                }
+                List<String> mappedOrderIDs = mappings.getOrDefault(bulkOrder.getOrderID(), List.of());
+                projectionStore.projectBulkOrder(bulkOrder, maybeFund.get(), mappedOrderIDs);
+                projectedBulkOrders++;
+            }
+
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("message", "Replay completed");
+            payload.put("projectedOrders", projectedOrders);
+            payload.put("projectedBulkOrders", projectedBulkOrders);
+            payload.put("missingOrderFunds", missingOrderFunds);
+            payload.put("missingBulkFunds", missingBulkFunds);
+            publishViewEvent("replay-completed", payload);
+            sendJsonResponse(exchange, 200, payload);
         }
     }
 
