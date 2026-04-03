@@ -1,150 +1,85 @@
 package com.iiit.oms.readmodel;
 
-import com.iiit.oms.model.OrderSide;
-import com.iiit.oms.model.OrderStatus;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 /**
  * Flattened read-model representation of Order optimized for UI consumption.
- * Denormalizes order and bulk order data into a single view document.
+ * Denormalizes order and fund data into a single view document.
  */
 public class OrderView {
-    private String orderId;
-    private String accountId;
-    private String fundId;
-    private OrderSide side;
+    private String orderID;
+    private String accountID;
+    private String fundID;
+    private String fundName;
+    private String orderSide; // "BUY" or "SELL"
     private BigDecimal amount;
     private BigDecimal quantity;
     private BigDecimal nav;
-    private OrderStatus status;
-    private String bulkOrderId;
-    private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+    private String orderStatus;
+    private String bulkOrderID;
 
-    // Default constructor for deserialization
     public OrderView() {
     }
 
-    public OrderView(String orderId, String accountId, String fundId, OrderSide side, 
-                     BigDecimal amount, BigDecimal quantity, BigDecimal nav,
-                     OrderStatus status, String bulkOrderId, LocalDateTime createdAt, LocalDateTime updatedAt) {
-        this.orderId = orderId;
-        this.accountId = accountId;
-        this.fundId = fundId;
-        this.side = side;
+    public OrderView(String orderID, String accountID, String fundID, String fundName,
+                     String orderSide, BigDecimal amount, BigDecimal quantity, BigDecimal nav,
+                     String orderStatus, String bulkOrderID) {
+        this.orderID = orderID;
+        this.accountID = accountID;
+        this.fundID = fundID;
+        this.fundName = fundName;
+        this.orderSide = orderSide;
         this.amount = amount;
         this.quantity = quantity;
         this.nav = nav;
-        this.status = status;
-        this.bulkOrderId = bulkOrderId;
-        this.createdAt = createdAt;
-        this.updatedAt = updatedAt;
+        this.orderStatus = orderStatus;
+        this.bulkOrderID = bulkOrderID;
     }
 
-    // Getters and setters
-    public String getOrderId() {
-        return orderId;
-    }
+    // Getters and Setters
+    public String getOrderID() { return orderID; }
+    public void setOrderID(String orderID) { this.orderID = orderID; }
 
-    public void setOrderId(String orderId) {
-        this.orderId = orderId;
-    }
+    public String getAccountID() { return accountID; }
+    public void setAccountID(String accountID) { this.accountID = accountID; }
 
-    public String getAccountId() {
-        return accountId;
-    }
+    public String getFundID() { return fundID; }
+    public void setFundID(String fundID) { this.fundID = fundID; }
 
-    public void setAccountId(String accountId) {
-        this.accountId = accountId;
-    }
+    public String getFundName() { return fundName; }
+    public void setFundName(String fundName) { this.fundName = fundName; }
 
-    public String getFundId() {
-        return fundId;
-    }
+    public String getOrderSide() { return orderSide; }
+    public void setOrderSide(String orderSide) { this.orderSide = orderSide; }
 
-    public void setFundId(String fundId) {
-        this.fundId = fundId;
-    }
+    public BigDecimal getAmount() { return amount; }
+    public void setAmount(BigDecimal amount) { this.amount = amount; }
 
-    public OrderSide getSide() {
-        return side;
-    }
+    public BigDecimal getQuantity() { return quantity; }
+    public void setQuantity(BigDecimal quantity) { this.quantity = quantity; }
 
-    public void setSide(OrderSide side) {
-        this.side = side;
-    }
+    public BigDecimal getNAV() { return nav; }
+    public void setNAV(BigDecimal nav) { this.nav = nav; }
 
-    public BigDecimal getAmount() {
-        return amount;
-    }
+    public String getOrderStatus() { return orderStatus; }
+    public void setOrderStatus(String orderStatus) { this.orderStatus = orderStatus; }
 
-    public void setAmount(BigDecimal amount) {
-        this.amount = amount;
-    }
-
-    public BigDecimal getQuantity() {
-        return quantity;
-    }
-
-    public void setQuantity(BigDecimal quantity) {
-        this.quantity = quantity;
-    }
-
-    public BigDecimal getNav() {
-        return nav;
-    }
-
-    public void setNav(BigDecimal nav) {
-        this.nav = nav;
-    }
-
-    public OrderStatus getStatus() {
-        return status;
-    }
-
-    public void setStatus(OrderStatus status) {
-        this.status = status;
-    }
-
-    public String getBulkOrderId() {
-        return bulkOrderId;
-    }
-
-    public void setBulkOrderId(String bulkOrderId) {
-        this.bulkOrderId = bulkOrderId;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+    public String getBulkOrderID() { return bulkOrderID; }
+    public void setBulkOrderID(String bulkOrderID) { this.bulkOrderID = bulkOrderID; }
 
     @Override
     public String toString() {
         return "OrderView{" +
-                "orderId='" + orderId + '\'' +
-                ", accountId='" + accountId + '\'' +
-                ", fundId='" + fundId + '\'' +
-                ", side=" + side +
+                "orderID='" + orderID + '\'' +
+                ", accountID='" + accountID + '\'' +
+                ", fundID='" + fundID + '\'' +
+                ", fundName='" + fundName + '\'' +
+                ", orderSide='" + orderSide + '\'' +
                 ", amount=" + amount +
                 ", quantity=" + quantity +
                 ", nav=" + nav +
-                ", status=" + status +
-                ", bulkOrderId='" + bulkOrderId + '\'' +
-                ", createdAt=" + createdAt +
-                ", updatedAt=" + updatedAt +
+                ", orderStatus='" + orderStatus + '\'' +
+                ", bulkOrderID='" + bulkOrderID + '\'' +
                 '}';
     }
 }
