@@ -1,6 +1,5 @@
 package com.iiit.oms.readmodel.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iiit.oms.readmodel.*;
 import com.iiit.oms.model.*;
 import com.mongodb.client.*;
@@ -22,7 +21,6 @@ public class MongoDbProjectionStore implements ProjectionStore {
     private final MongoDatabase database;
     private final MongoCollection<Document> orderViewsCollection;
     private final MongoCollection<Document> bulkOrderViewsCollection;
-    private final ObjectMapper objectMapper;
     private static final ReplaceOptions UPSERT = new ReplaceOptions().upsert(true);
 
     /**
@@ -35,7 +33,6 @@ public class MongoDbProjectionStore implements ProjectionStore {
         this.database = mongoClient.getDatabase(databaseName);
         this.orderViewsCollection = database.getCollection("order_views");
         this.bulkOrderViewsCollection = database.getCollection("bulk_order_views");
-        this.objectMapper = new ObjectMapper();
         createIndexes();
     }
 
@@ -123,6 +120,15 @@ public class MongoDbProjectionStore implements ProjectionStore {
     }
 
     @Override
+    public List<OrderView> findAllOrderViews() {
+        return orderViewsCollection.find()
+                .into(new ArrayList<>())
+                .stream()
+                .map(this::documentToOrderView)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public void deleteOrderView(String orderID) {
         orderViewsCollection.deleteOne(Filters.eq("orderID", orderID));
     }
@@ -168,6 +174,15 @@ public class MongoDbProjectionStore implements ProjectionStore {
     @Override
     public List<BulkOrderView> findBulkOrdersByFund(String fundID) {
         return bulkOrderViewsCollection.find(Filters.eq("fundID", fundID))
+                .into(new ArrayList<>())
+                .stream()
+                .map(this::documentToBulkOrderView)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<BulkOrderView> findAllBulkOrderViews() {
+        return bulkOrderViewsCollection.find()
                 .into(new ArrayList<>())
                 .stream()
                 .map(this::documentToBulkOrderView)

@@ -2,11 +2,14 @@ package com.iiit.oms.processor;
 
 import com.iiit.oms.model.BulkOrder;
 import com.iiit.oms.model.BulkOrderStatus;
+import com.iiit.oms.model.Fund;
 import com.iiit.oms.model.Order;
 import com.iiit.oms.model.OrderSide;
 import com.iiit.oms.model.OrderStatus;
+import com.iiit.oms.readmodel.OrderProjectionListener;
 import com.iiit.oms.repository.BulkOrderRepository;
 import com.iiit.oms.repository.BulkOrderMappingRepository;
+import com.iiit.oms.repository.FundRepository;
 import com.iiit.oms.repository.OrderRepository;
 import com.iiit.oms.util.UniqueIdGenerator;
 
@@ -15,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 //import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -32,14 +36,26 @@ public class BatchoutScheduler {
     private final OrderRepository orderRepository;
     private final BulkOrderMappingRepository bulkOrderMappingRepository;
     private final BulkOrderRepository bulkOrderRepository;
+    private final FundRepository fundRepository;
+    private final OrderProjectionListener projectionListener;
     private final ScheduledExecutorService scheduler;
     //private final Map<String, BulkOrder> bulkOrders;
     private ScheduledFuture<?> batchoutTask;
 
     public BatchoutScheduler(OrderRepository orderRepository, BulkOrderMappingRepository bulkOrderMappingRepository, BulkOrderRepository bulkOrderRepository) {
+        this(orderRepository, bulkOrderMappingRepository, bulkOrderRepository, null, null);
+    }
+
+    public BatchoutScheduler(OrderRepository orderRepository,
+                             BulkOrderMappingRepository bulkOrderMappingRepository,
+                             BulkOrderRepository bulkOrderRepository,
+                             FundRepository fundRepository,
+                             OrderProjectionListener projectionListener) {
         this.orderRepository = Objects.requireNonNull(orderRepository, "orderRepository must not be null");
         this.bulkOrderMappingRepository = Objects.requireNonNull(bulkOrderMappingRepository, "bulkOrderMappingRepository must not be null");
         this.bulkOrderRepository = Objects.requireNonNull(bulkOrderRepository, "bulkOrderRepository must not be null");
+        this.fundRepository = fundRepository;
+        this.projectionListener = projectionListener;
         this.scheduler = Executors.newScheduledThreadPool(1);
         //this.bulkOrders = new ConcurrentHashMap<>();
     }
@@ -89,11 +105,19 @@ public class BatchoutScheduler {
             //bulkOrders.put(bulkOrderId, bulkOrder);
             bulkOrderRepository.save(bulkOrder);
             bulkOrderMappingRepository.save(bulkOrderId, constituentOrderIds);
+            Optional<Fund> maybeFund = findFund(key.productID);
 
             // Mark constituent orders as BULKED once they are grouped into a bulk order.
             for (Order individualOrder : ordersForBatch) {
                 individualOrder.setOrderStatus(OrderStatus.BULKED);
                 orderRepository.save(individualOrder);
+                if (projectionListener != null && maybeFund.isPresent()) {
+                    projectionListener.onOrderStatusChanged(individualOrder, bulkOrder, maybeFund.get());
+                }
+            }
+
+            if (projectionListener != null && maybeFund.isPresent()) {
+                projectionListener.onBulkOrderCreated(bulkOrder, maybeFund.get(), constituentOrderIds);
             }
 
             createdBulkOrders.add(bulkOrder);
@@ -179,5 +203,12 @@ public class BatchoutScheduler {
         public int hashCode() {
             return Objects.hash(productID, orderSide);
         }
+    }
+
+    private Optional<Fund> findFund(String productID) {
+        if (fundRepository == null || productID == null || productID.isBlank()) {
+            return Optional.empty();
+        }
+        return fundRepository.findByFundId(productID);
     }
 }

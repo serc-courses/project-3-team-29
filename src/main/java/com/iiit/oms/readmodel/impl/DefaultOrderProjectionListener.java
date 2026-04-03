@@ -4,7 +4,6 @@ import com.iiit.oms.readmodel.*;
 import com.iiit.oms.model.BulkOrder;
 import com.iiit.oms.model.Order;
 import com.iiit.oms.model.Fund;
-import com.iiit.oms.model.Account;
 import java.util.List;
 
 /**
@@ -25,7 +24,7 @@ public class DefaultOrderProjectionListener implements OrderProjectionListener {
     }
 
     @Override
-    public void onOrderPlanned(Order order, Fund fund, Account account) {
+    public void onOrderPlanned(Order order, Fund fund) {
         // First time we see this order - project it to read model
         projectionStore.projectOrder(order, null, fund);
     }

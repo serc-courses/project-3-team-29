@@ -13,6 +13,10 @@ import com.iiit.oms.model.OrderSide;
 import com.iiit.oms.model.OrderStatus;
 import com.iiit.oms.processor.OrderManager;
 import com.iiit.oms.processor.OrderStateMachine;
+import com.iiit.oms.readmodel.OrderProjectionListener;
+import com.iiit.oms.readmodel.ProjectionStore;
+import com.iiit.oms.readmodel.impl.DefaultOrderProjectionListener;
+import com.iiit.oms.readmodel.impl.InMemoryProjectionStore;
 import com.iiit.oms.repository.BulkOrderMappingRepository;
 import com.iiit.oms.repository.BulkOrderRepository;
 import com.iiit.oms.repository.FundRepository;
@@ -327,6 +331,90 @@ class OrderRestServerTest {
         }
     }
 
+    @Test
+    void shouldExposeProjectedOrdersViaReadEndpoint() throws Exception {
+        InMemoryOrderDatabase orderDatabase = new InMemoryOrderDatabase();
+        InMemoryFundDatabase fundDatabase = new InMemoryFundDatabase();
+
+        OrderRepository orderRepository = new InMemoryOrderRepository(orderDatabase);
+        FundRepository fundRepository = new InMemoryFundRepository(fundDatabase);
+        fundRepository.save(new Fund("FND001", "Fund 1", "Family", BigDecimal.TEN));
+
+        ProjectionStore projectionStore = new InMemoryProjectionStore();
+        OrderProjectionListener projectionListener = new DefaultOrderProjectionListener(projectionStore);
+
+        OrderRestServer server = new OrderRestServer(
+                0,
+                orderRepository,
+                null,
+                null,
+                fundRepository,
+                null,
+                projectionStore,
+                projectionListener
+        );
+        server.start();
+
+        try {
+            String payload = "["
+                    + "{\"orderID\":\"ORD900\",\"productID\":\"FND001\",\"amount\":1000,\"accountID\":\"ACCT00001\",\"orderSide\":\"BUY\"}"
+                    + "]";
+            HttpResponse<String> postResponse = postJson(server.getPort(), payload);
+            assertEquals(201, postResponse.statusCode());
+
+            HttpResponse<String> readResponse = getViewOrders(server.getPort());
+            assertEquals(200, readResponse.statusCode());
+            assertTrue(readResponse.body().contains("ORD900"));
+            assertTrue(readResponse.body().contains("PLANNED"));
+            assertTrue(readResponse.body().contains("FND001"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void shouldExposeDashboardAndUiEndpoints() throws Exception {
+        InMemoryOrderDatabase orderDatabase = new InMemoryOrderDatabase();
+        InMemoryFundDatabase fundDatabase = new InMemoryFundDatabase();
+
+        OrderRepository orderRepository = new InMemoryOrderRepository(orderDatabase);
+        FundRepository fundRepository = new InMemoryFundRepository(fundDatabase);
+        fundRepository.save(new Fund("FND001", "Fund 1", "Family", BigDecimal.TEN));
+
+        ProjectionStore projectionStore = new InMemoryProjectionStore();
+        OrderProjectionListener projectionListener = new DefaultOrderProjectionListener(projectionStore);
+
+        OrderRestServer server = new OrderRestServer(
+                0,
+                orderRepository,
+                null,
+                null,
+                fundRepository,
+                null,
+                projectionStore,
+                projectionListener
+        );
+        server.start();
+
+        try {
+            String payload = "["
+                    + "{\"orderID\":\"ORD901\",\"productID\":\"FND001\",\"amount\":500,\"accountID\":\"ACCT00001\",\"orderSide\":\"BUY\"}"
+                    + "]";
+            HttpResponse<String> postResponse = postJson(server.getPort(), payload);
+            assertEquals(201, postResponse.statusCode());
+
+            HttpResponse<String> dashboardResponse = getViewDashboard(server.getPort());
+            assertEquals(200, dashboardResponse.statusCode());
+            assertTrue(dashboardResponse.body().contains("\"totalOrders\":1"));
+
+            HttpResponse<String> uiResponse = getViewUi(server.getPort());
+            assertEquals(200, uiResponse.statusCode());
+            assertTrue(uiResponse.body().contains("OMS CQRS Dashboard"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private HttpResponse<String> postJson(int port, String payload) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
@@ -404,6 +492,36 @@ class OrderRestServerTest {
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(new URI("http://localhost:" + port + "/orders/book"))
+                .GET()
+                .build();
+
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> getViewOrders(int port) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/view/orders"))
+                .GET()
+                .build();
+
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> getViewDashboard(int port) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/view/dashboard"))
+                .GET()
+                .build();
+
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> getViewUi(int port) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/view/ui"))
                 .GET()
                 .build();
 

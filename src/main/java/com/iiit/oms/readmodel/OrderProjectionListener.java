@@ -3,7 +3,6 @@ package com.iiit.oms.readmodel;
 import com.iiit.oms.model.BulkOrder;
 import com.iiit.oms.model.Order;
 import com.iiit.oms.model.Fund;
-import com.iiit.oms.model.Account;
 import java.util.List;
 
 /**
@@ -16,7 +15,7 @@ public interface OrderProjectionListener {
     /**
      * Called when an order is first created/planned
      */
-    void onOrderPlanned(Order order, Fund fund, Account account);
+    void onOrderPlanned(Order order, Fund fund);
 
     /**
      * Called when an order's status changes

@@ -72,6 +72,11 @@ public class InMemoryProjectionStore implements ProjectionStore {
     }
 
     @Override
+    public List<OrderView> findAllOrderViews() {
+        return new ArrayList<>(orderViews.values());
+    }
+
+    @Override
     public void deleteOrderView(String orderID) {
         orderViews.remove(orderID);
     }
@@ -116,6 +121,11 @@ public class InMemoryProjectionStore implements ProjectionStore {
         return bulkOrderViews.values().stream()
                 .filter(v -> v.getFundID().equals(fundID))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<BulkOrderView> findAllBulkOrderViews() {
+        return new ArrayList<>(bulkOrderViews.values());
     }
 
     @Override

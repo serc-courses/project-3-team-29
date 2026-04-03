@@ -3,7 +3,6 @@ package com.iiit.oms.readmodel;
 import com.iiit.oms.model.BulkOrder;
 import com.iiit.oms.model.Order;
 import com.iiit.oms.model.Fund;
-import com.iiit.oms.model.Account;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +20,7 @@ public interface ProjectionStore {
     List<OrderView> findOrdersByAccount(String accountID);
     List<OrderView> findOrdersByFund(String fundID);
     List<OrderView> findOrdersByBulkOrder(String bulkOrderID);
+    List<OrderView> findAllOrderViews();
     void deleteOrderView(String orderID);
 
     // BulkOrderView operations
@@ -28,6 +28,7 @@ public interface ProjectionStore {
     void updateBulkOrderView(String bulkOrderID, BulkOrder bulkOrder, Fund fund, List<String> matchedOrderIDs);
     Optional<BulkOrderView> findBulkOrderView(String bulkOrderID);
     List<BulkOrderView> findBulkOrdersByFund(String fundID);
+    List<BulkOrderView> findAllBulkOrderViews();
     void deleteBulkOrderView(String bulkOrderID);
 
     // Maintenance
