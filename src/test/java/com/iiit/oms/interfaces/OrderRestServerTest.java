@@ -7,6 +7,7 @@ import com.iiit.oms.db.inmemory.InMemoryBulkOrderMappingDatabase;
 import com.iiit.oms.db.inmemory.InMemoryFundDatabase;
 import com.iiit.oms.model.BulkOrder;
 import com.iiit.oms.model.BulkOrderStatus;
+import com.iiit.oms.model.Fund;
 import com.iiit.oms.model.Order;
 import com.iiit.oms.model.OrderSide;
 import com.iiit.oms.model.OrderStatus;
@@ -14,6 +15,7 @@ import com.iiit.oms.processor.OrderManager;
 import com.iiit.oms.processor.OrderStateMachine;
 import com.iiit.oms.repository.BulkOrderMappingRepository;
 import com.iiit.oms.repository.BulkOrderRepository;
+import com.iiit.oms.repository.FundRepository;
 import com.iiit.oms.repository.OrderRepository;
 import com.iiit.oms.repository.inmemory.InMemoryAccountRepository;
 import com.iiit.oms.repository.inmemory.InMemoryBulkOrderMappingRepository;
@@ -26,6 +28,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.math.BigDecimal;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -245,6 +248,85 @@ class OrderRestServerTest {
         }
     }
 
+    @Test
+    void shouldBookConfirmedBulkOrdersViaBookEndpoint() throws Exception {
+        InMemoryOrderDatabase orderDatabase = new InMemoryOrderDatabase();
+        InMemoryBulkOrderDatabase bulkOrderDatabase = new InMemoryBulkOrderDatabase();
+        InMemoryBulkOrderMappingDatabase mappingDatabase = new InMemoryBulkOrderMappingDatabase();
+        InMemoryFundDatabase fundDatabase = new InMemoryFundDatabase();
+
+        OrderRepository orderRepository = new InMemoryOrderRepository(orderDatabase);
+        BulkOrderRepository bulkOrderRepository = new InMemoryBulkOrderRepository(bulkOrderDatabase);
+        BulkOrderMappingRepository mappingRepository = new InMemoryBulkOrderMappingRepository(mappingDatabase);
+        FundRepository fundRepository = new InMemoryFundRepository(fundDatabase);
+
+        fundRepository.save(new Fund("FND001", "Fund 1", "Family", BigDecimal.TEN));
+
+        OrderStateMachine stateMachine = new OrderStateMachine(
+                new OrderManager(
+                        new InMemoryAccountRepository(new InMemoryAccountDatabase()),
+                        fundRepository
+                )
+        );
+
+        OrderRestServer server = new OrderRestServer(0, orderRepository, bulkOrderRepository, mappingRepository, fundRepository, stateMachine);
+        server.start();
+
+        try {
+            Order order1 = new Order("ORD700", "FND001", null, BigDecimal.valueOf(5), "ACCT00001", OrderSide.BUY, OrderStatus.CONFIRMED, true);
+            Order order2 = new Order("ORD701", "FND001", null, BigDecimal.valueOf(15), "ACCT00002", OrderSide.BUY, OrderStatus.CONFIRMED, true);
+            orderRepository.save(order1);
+            orderRepository.save(order2);
+
+            BulkOrder bulkOrder = new BulkOrder(
+                    "BLK700",
+                    "FND001",
+                    OrderSide.BUY,
+                    BulkOrderStatus.CONFIRMED,
+                    BigDecimal.ZERO,
+                    BigDecimal.valueOf(20),
+                    "FIRMACCT"
+            );
+            bulkOrderRepository.save(bulkOrder);
+            mappingRepository.save("BLK700", java.util.List.of("ORD700", "ORD701"));
+
+            HttpResponse<String> response = postBook(server.getPort());
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("\"bookedBulkOrders\":1"));
+            assertTrue(response.body().contains("\"bookedIndividualOrders\":2"));
+
+            BulkOrder savedBulkOrder = bulkOrderRepository.findByOrderId("BLK700").orElseThrow();
+            assertEquals(BulkOrderStatus.BOOKED, savedBulkOrder.getBulkOrderStatus());
+            assertEquals(0, savedBulkOrder.getQuantity().compareTo(BigDecimal.valueOf(2).setScale(8)));
+
+            Order savedOrder1 = orderRepository.findByOrderId("ORD700").orElseThrow();
+            Order savedOrder2 = orderRepository.findByOrderId("ORD701").orElseThrow();
+            assertEquals(OrderStatus.BOOKED, savedOrder1.getOrderStatus());
+            assertEquals(OrderStatus.BOOKED, savedOrder2.getOrderStatus());
+            assertEquals(0, savedOrder1.getQuantity().compareTo(BigDecimal.valueOf(0.5).setScale(8)));
+            assertEquals(0, savedOrder2.getQuantity().compareTo(BigDecimal.valueOf(1.5).setScale(8)));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void shouldRejectGetOnBookEndpoint() throws Exception {
+        InMemoryOrderDatabase orderDatabase = new InMemoryOrderDatabase();
+        OrderRepository orderRepository = new InMemoryOrderRepository(orderDatabase);
+        OrderRestServer server = new OrderRestServer(0, orderRepository);
+        server.start();
+
+        try {
+            HttpResponse<String> response = getBook(server.getPort());
+            assertEquals(405, response.statusCode());
+            assertTrue(response.body().contains("Only POST is supported"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private HttpResponse<String> postJson(int port, String payload) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
@@ -301,6 +383,27 @@ class OrderRestServerTest {
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(new URI("http://localhost:" + port + "/orders/confirm"))
+                .GET()
+                .build();
+
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> postBook(int port) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/orders/book"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{}"))
+                .build();
+
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> getBook(int port) throws Exception {
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/orders/book"))
                 .GET()
                 .build();
 

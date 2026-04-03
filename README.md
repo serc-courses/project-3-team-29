@@ -242,10 +242,12 @@ After app startup, run these commands in a separate terminal.
 curl -i -X POST http://localhost:8080/orders/plan \
   -H "Content-Type: application/json" \
   -d '[
-    {"orderID":"ORD900","productID":"FND001","quantity":10,"amount":1000,"accountID":"ACCT00001","orderSide":"BUY"},
-    {"orderID":"ORD901","productID":"FND002","quantity":5,"amount":500,"accountID":"ACCT00002","orderSide":"SELL"}
+    {"productID":"FND001","amount":1000,"accountID":"ACCT00001","orderSide":"BUY"},
+    {"productID":"FND001","amount":1500,"accountID":"ACCT00002","orderSide":"BUY"}
   ]'
 ```
+
+The server assigns `orderID` automatically when it is omitted from the payload.
 
 ### List all orders
 

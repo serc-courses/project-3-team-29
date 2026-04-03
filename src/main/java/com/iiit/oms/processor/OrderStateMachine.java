@@ -32,6 +32,25 @@ public class OrderStateMachine {
         return order;
     }
 
+    public Order processBooking(Order order) {
+        Objects.requireNonNull(order, "order must not be null");
+        LOGGER.info("Starting booking processing for order: " + order.getOrderID() + " with status: " + order.getOrderStatus());
+
+        try {
+            if (order.getOrderStatus() != OrderStatus.CONFIRMED) {
+                throw new IllegalStateException("Order must be CONFIRMED for booking, found: " + order.getOrderStatus());
+            }
+            advance(order);
+        } catch (RuntimeException ex) {
+            LOGGER.severe("Error booking order " + order.getOrderID() + ": " + ex.getMessage());
+            order.setOrderStatus(OrderStatus.ERRORED);
+            order.setErrorDescription(ex.getMessage());
+            throw ex;
+        }
+
+        return order;
+    }
+
     private void advance(Order order) {
         OrderStatus status = order.getOrderStatus();
         LOGGER.fine("Advancing order " + order.getOrderID() + " from status: " + status);
@@ -64,14 +83,8 @@ public class OrderStateMachine {
                 case CONFIRMED:
                     LOGGER.info("Executing CONFIRMED->CONTRACTED transition for order: " + order.getOrderID());
                     orderManager.contract(order);
-                    order.setOrderStatus(OrderStatus.CONTRACTED);
-                    break;
-                case CONTRACTED:
-                    LOGGER.info("Executing CONTRACTED->BOOKED transition for order: " + order.getOrderID());
-                    orderManager.book(order);
                     order.setOrderStatus(OrderStatus.BOOKED);
                     break;
-                case BOOKED:
                 case ERRORED:
                     break;
                 default:

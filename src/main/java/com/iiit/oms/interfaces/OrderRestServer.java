@@ -5,12 +5,14 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.iiit.oms.model.BulkOrder;
 import com.iiit.oms.model.BulkOrderStatus;
+import com.iiit.oms.model.Fund;
 import com.iiit.oms.model.Order;
 import com.iiit.oms.model.OrderSide;
 import com.iiit.oms.model.OrderStatus;
 import com.iiit.oms.processor.OrderStateMachine;
 import com.iiit.oms.repository.BulkOrderMappingRepository;
 import com.iiit.oms.repository.BulkOrderRepository;
+import com.iiit.oms.repository.FundRepository;
 import com.iiit.oms.repository.OrderRepository;
 import com.iiit.oms.util.UniqueIdGenerator;
 import com.sun.net.httpserver.HttpExchange;
@@ -21,6 +23,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -36,16 +40,18 @@ public class OrderRestServer {
     private static final String LIST_ORDERS_PATH = "/orders";
     private static final String ORDER_STATUS_PATH = "/orders/status";
     private static final String CONFIRM_ORDERS_PATH = "/orders/confirm";
+    private static final String BOOK_ORDERS_PATH = "/orders/book";
 
     private final HttpServer httpServer;
     private final OrderRepository orderRepository;
     private final BulkOrderRepository bulkOrderRepository;
     private final BulkOrderMappingRepository bulkOrderMappingRepository;
+    private final FundRepository fundRepository;
     private final OrderStateMachine orderStateMachine;
     private final ObjectMapper objectMapper;
 
     public OrderRestServer(int port, OrderRepository orderRepository) throws IOException {
-        this(port, orderRepository, null, null, null);
+        this(port, orderRepository, null, null, null, null);
     }
 
     public OrderRestServer(int port,
@@ -53,9 +59,19 @@ public class OrderRestServer {
                            BulkOrderRepository bulkOrderRepository,
                            BulkOrderMappingRepository bulkOrderMappingRepository,
                            OrderStateMachine orderStateMachine) throws IOException {
+        this(port, orderRepository, bulkOrderRepository, bulkOrderMappingRepository, null, orderStateMachine);
+    }
+
+    public OrderRestServer(int port,
+                           OrderRepository orderRepository,
+                           BulkOrderRepository bulkOrderRepository,
+                           BulkOrderMappingRepository bulkOrderMappingRepository,
+                           FundRepository fundRepository,
+                           OrderStateMachine orderStateMachine) throws IOException {
         this.orderRepository = Objects.requireNonNull(orderRepository, "orderRepository must not be null");
         this.bulkOrderRepository = bulkOrderRepository;
         this.bulkOrderMappingRepository = bulkOrderMappingRepository;
+        this.fundRepository = fundRepository;
         this.orderStateMachine = orderStateMachine;
         this.objectMapper = new ObjectMapper();
         this.httpServer = HttpServer.create(new InetSocketAddress(port), 0);
@@ -63,6 +79,7 @@ public class OrderRestServer {
         this.httpServer.createContext(LIST_ORDERS_PATH, new ListOrdersHandler());
         this.httpServer.createContext(ORDER_STATUS_PATH, new OrderStatusHandler());
         this.httpServer.createContext(CONFIRM_ORDERS_PATH, new ConfirmOrdersHandler());
+        this.httpServer.createContext(BOOK_ORDERS_PATH, new BookOrdersHandler());
         this.httpServer.setExecutor(Executors.newFixedThreadPool(4));
     }
 
@@ -284,6 +301,98 @@ public class OrderRestServer {
                 LOGGER.severe("Failed to confirm bulk orders: " + ex.getMessage());
                 writeResponse(exchange, 500, "{\"message\":\"Failed to confirm bulk orders\"}");
             }
+        }
+
+        private void writeResponse(HttpExchange exchange, int statusCode, String body) throws IOException {
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json; charset=utf-8");
+            exchange.sendResponseHeaders(statusCode, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        }
+    }
+
+    private final class BookOrdersHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                writeResponse(exchange, 405, "{\"message\":\"Only POST is supported\"}");
+                return;
+            }
+
+            if (bulkOrderRepository == null || bulkOrderMappingRepository == null || fundRepository == null || orderStateMachine == null) {
+                writeResponse(exchange, 500, "{\"message\":\"Book endpoint is not configured\"}");
+                return;
+            }
+
+            try {
+                List<BulkOrder> confirmedBulkOrders = bulkOrderRepository.findAll().stream()
+                        .filter(bulkOrder -> bulkOrder.getBulkOrderStatus() == BulkOrderStatus.CONFIRMED)
+                        .collect(Collectors.toList());
+
+                int bookedBulkOrders = 0;
+                int bookedIndividualOrders = 0;
+                int missingFunds = 0;
+                int missingIndividualOrders = 0;
+
+                for (BulkOrder bulkOrder : confirmedBulkOrders) {
+                    Optional<Fund> maybeFund = fundRepository.findByFundId(bulkOrder.getProductID());
+                    if (maybeFund.isEmpty()) {
+                        missingFunds++;
+                        continue;
+                    }
+
+                    BigDecimal nav = maybeFund.get().getNAV();
+                    if (nav == null || nav.compareTo(BigDecimal.ZERO) <= 0) {
+                        throw new IllegalStateException("Invalid NAV for fund " + bulkOrder.getProductID() + ": " + nav);
+                    }
+
+                    bulkOrder.setQuantity(calculateQuantity(bulkOrder.getAmount(), nav));
+                    bulkOrder.setBulkOrderStatus(BulkOrderStatus.BOOKED);
+                    bulkOrderRepository.save(bulkOrder);
+                    bookedBulkOrders++;
+
+                    List<String> individualOrderIds = bulkOrderMappingRepository
+                            .findIndividualOrderIds(bulkOrder.getOrderID())
+                            .orElse(List.of());
+
+                    for (String individualOrderId : individualOrderIds) {
+                        Optional<Order> maybeOrder = orderRepository.findByOrderId(individualOrderId);
+                        if (maybeOrder.isEmpty()) {
+                            missingIndividualOrders++;
+                            continue;
+                        }
+
+                        Order order = maybeOrder.get();
+                        order.setQuantity(calculateQuantity(order.getAmount(), nav));
+
+                        Order advancedOrder = orderStateMachine.processBooking(order);
+                        orderRepository.save(advancedOrder);
+                        if (advancedOrder.getOrderStatus() == OrderStatus.BOOKED) {
+                            bookedIndividualOrders++;
+                        }
+                    }
+                }
+
+                Map<String, Object> response = Map.of(
+                        "message", "Bulk booking completed",
+                        "bookedBulkOrders", bookedBulkOrders,
+                        "bookedIndividualOrders", bookedIndividualOrders,
+                        "missingFunds", missingFunds,
+                        "missingIndividualOrders", missingIndividualOrders
+                );
+                writeResponse(exchange, 200, objectMapper.writeValueAsString(response));
+            } catch (RuntimeException ex) {
+                LOGGER.severe("Failed to book bulk orders: " + ex.getMessage());
+                writeResponse(exchange, 500, "{\"message\":\"Failed to book bulk orders\"}");
+            }
+        }
+
+        private BigDecimal calculateQuantity(BigDecimal amount, BigDecimal nav) {
+            if (amount == null) {
+                throw new IllegalStateException("Amount is required for quantity calculation");
+            }
+            return amount.divide(nav, 8, RoundingMode.HALF_UP);
         }
 
         private void writeResponse(HttpExchange exchange, int statusCode, String body) throws IOException {

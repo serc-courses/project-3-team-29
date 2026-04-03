@@ -52,6 +52,7 @@ public class OmsApplication {
             orderRepository,
             bulkOrderRepository,
             bulkOrderMappingRepository,
+            fundRepository,
             orderStateMachine
         );
 
@@ -76,6 +77,7 @@ public class OmsApplication {
         System.out.println("  GET  /orders - List all orders");
         System.out.println("  GET  /orders/status?orderID=<ID> - Get status by order ID");
         System.out.println("  POST /orders/confirm - Confirm BULKED bulk orders and mapped individual orders");
+        System.out.println("  POST /orders/book - Book CONFIRMED bulk orders and mapped individual orders");
         System.out.println("Order flow includes BULKED between PLACED and CONFIRMED");
     }
 
