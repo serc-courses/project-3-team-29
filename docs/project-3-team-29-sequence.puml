@@ -1,0 +1,330 @@
+@startuml Order Processing Sequence
+title Order Processing Workflow - Comprehensive Sequence Diagram
+
+actor Client
+participant "OrderRestServer" as REST
+participant "OrderRepository" as OrderRepo
+participant "FundRepository" as FundRepo
+participant "AccountRepository" as AcctRepo
+participant "OrderScheduler" as Scheduler
+participant "OrderStateMachine" as StateMachine
+participant "OrderManager" as Manager
+participant "BatchoutScheduler" as BatchScheduler
+participant "BulkOrderRepository" as BulkOrderRepo
+participant "BulkOrderMappingRepository" as MapRepo
+participant "OrderProjectionListener" as Listener
+participant "ProjectionStore" as Store
+
+autonumber
+
+Client ->> REST: POST /orders/plan (Order details)
+activate REST
+REST ->> OrderRepo: save(Order with PLANNED status)
+activate OrderRepo
+OrderRepo ->> OrderRepo: persist to database
+deactivate OrderRepo
+note over REST, Listener
+  If projection listener configured
+end note
+REST ->> Listener: onOrderPlanned(order, fund)
+activate Listener
+Listener ->> Store: projectOrder(order, null, fund)
+activate Store
+Store ->> Store: create OrderView (denormalized)
+deactivate Store
+deactivate Listener
+REST -->> Client: 200 OK (Order ID)
+deactivate REST
+
+note over Scheduler, Manager
+  Every 30 seconds
+end note
+
+Scheduler ->> OrderRepo: findAll() + filter(not processed)
+activate OrderRepo
+OrderRepo -->> Scheduler: List of pending orders
+deactivate OrderRepo
+
+Scheduler ->> Scheduler: pollAndProcessPendingOrders()
+activate Scheduler
+
+loop For each pending order
+  Scheduler ->> StateMachine: process(Order)
+  activate StateMachine
+  
+  note over StateMachine, Manager
+    State transitions occur in a loop
+  end note
+  
+  alt PLANNED status
+    StateMachine ->> Manager: validate(order)
+    activate Manager
+    note over Manager, AcctRepo
+      Validate order details
+    end note
+    Manager ->> FundRepo: existsByFundId(productID)
+    activate FundRepo
+    FundRepo -->> Manager: boolean
+    deactivate FundRepo
+    Manager ->> AcctRepo: existsByAccountId(accountID)
+    activate AcctRepo
+    AcctRepo -->> Manager: boolean
+    deactivate AcctRepo
+    Manager -->> StateMachine: OK
+    deactivate Manager
+    StateMachine ->> StateMachine: setStatus(VALIDATED)
+  end
+  
+  alt VALIDATED status
+    StateMachine ->> Manager: enrich(order)
+    activate Manager
+    Manager -->> StateMachine: OK
+    deactivate Manager
+    StateMachine ->> StateMachine: setStatus(ENRICHED)
+  end
+  
+  alt ENRICHED status
+    StateMachine ->> Manager: place(order)
+    activate Manager
+    Manager -->> StateMachine: OK
+    deactivate Manager
+    StateMachine ->> StateMachine: setStatus(PLACED)
+  end
+  
+  StateMachine -->> Scheduler: Processed Order
+  deactivate StateMachine
+  
+  Scheduler ->> OrderRepo: save(Processed Order)
+  activate OrderRepo
+  OrderRepo ->> OrderRepo: persist updated order
+  deactivate OrderRepo
+end
+
+deactivate Scheduler
+
+note over BatchScheduler, Manager
+  Every 120 seconds
+end note
+
+BatchScheduler ->> OrderRepo: findAll() + filter(PLACED)
+activate OrderRepo
+OrderRepo -->> BatchScheduler: List of PLACED orders
+deactivate OrderRepo
+
+BatchScheduler ->> BatchScheduler: Group orders by Product & Side
+BatchScheduler ->> BatchScheduler: Create BulkOrder for each group
+BatchScheduler ->> BulkOrderRepo: save(BulkOrder)
+activate BulkOrderRepo
+BulkOrderRepo ->> BulkOrderRepo: persist BulkOrder
+deactivate BulkOrderRepo
+
+note over BatchScheduler, MapRepo
+  Map individual orders to bulk order
+end note
+BatchScheduler ->> MapRepo: saveBulkMapping(bulkOrderID, orderIDs)
+activate MapRepo
+MapRepo ->> MapRepo: persist mapping
+deactivate MapRepo
+
+BatchScheduler ->> OrderRepo: updateAll(orders -> BULKED)
+activate OrderRepo
+OrderRepo ->> OrderRepo: update orders to BULKED
+deactivate OrderRepo
+
+note over BatchScheduler, Listener
+  Update read models with bulk creation
+end note
+BatchScheduler ->> Listener: onBulkOrderCreated(bulkOrder, fund, orderIDs)
+activate Listener
+Listener ->> Store: projectBulkOrder(bulkOrder, fund, orderIDs)
+activate Store
+Store ->> Store: create BulkOrderView
+deactivate Store
+deactivate Listener
+
+Client ->> REST: POST /orders/confirm
+activate REST
+REST ->> OrderRepo: findByStatus(BULKED)
+activate OrderRepo
+OrderRepo -->> REST: BULKED orders
+deactivate OrderRepo
+loop For each BULKED order
+  REST ->> StateMachine: process(BulkedOrder)
+  activate StateMachine
+  StateMachine ->> Manager: confirm(order)
+  activate Manager
+  Manager -->> StateMachine: OK
+  deactivate Manager
+  StateMachine ->> StateMachine: setStatus(CONFIRMED)
+  StateMachine -->> REST: Confirmed Order
+  deactivate StateMachine
+  
+  REST ->> OrderRepo: save(Confirmed Order)
+  activate OrderRepo
+  OrderRepo ->> OrderRepo: persist confirmed order
+  deactivate OrderRepo
+  
+  REST ->> Listener: onOrderStatusChanged(order, bulkOrder, fund)
+  activate Listener
+  Listener ->> Store: updateOrderView(orderID, order, fund, bulkOrder)
+  activate Store
+  Store ->> Store: update OrderView in store
+  deactivate Store
+  deactivate Listener
+end
+REST -->> Client: 200 OK (Confirmed)
+deactivate REST
+
+Client ->> REST: POST /orders/book
+activate REST
+REST ->> OrderRepo: findByStatus(CONFIRMED)
+activate OrderRepo
+OrderRepo -->> REST: CONFIRMED orders
+deactivate OrderRepo
+loop For each CONFIRMED order
+  REST ->> StateMachine: processBooking(ConfirmedOrder)
+  activate StateMachine
+  StateMachine ->> Manager: book(order)
+  activate Manager
+  Manager -->> StateMachine: OK
+  deactivate Manager
+  StateMachine ->> StateMachine: setStatus(BOOKED)
+  StateMachine -->> REST: Booked Order
+  deactivate StateMachine
+  
+  REST ->> OrderRepo: save(Booked Order)
+  activate OrderRepo
+  OrderRepo ->> OrderRepo: persist booked order
+  deactivate OrderRepo
+  
+  REST ->> Listener: onOrderStatusChanged(order, bulkOrder, fund)
+  activate Listener
+  Listener ->> Store: updateOrderView(orderID, order, fund, bulkOrder)
+  activate Store
+  Store ->> Store: update OrderView in store
+  deactivate Store
+  deactivate Listener
+end
+REST -->> Client: 200 OK (Booked)
+deactivate REST
+
+note over Client, Store
+  === READ-SIDE QUERIES (CQRS) ===
+  Client queries denormalized read models
+end note
+
+Client ->> REST: GET /view/orders (with optional filters)
+activate REST
+REST ->> Store: findOrderView(orderID) OR findOrdersByAccount(accountID) OR findOrdersByFund(fundID)
+activate Store
+Store -->> REST: List<OrderView>
+deactivate Store
+REST -->> Client: 200 OK (Flattened OrderViews)
+deactivate REST
+
+Client ->> REST: GET /view/bulk-orders (with optional filters)
+activate REST
+REST ->> Store: findBulkOrderView(bulkOrderID) OR findBulkOrdersByFund(fundID)
+activate Store
+Store -->> REST: List<BulkOrderView>
+deactivate Store
+REST -->> Client: 200 OK (Flattened BulkOrderViews)
+deactivate REST
+
+Client ->> REST: GET /view/dashboard
+activate REST
+REST ->> Store: findAllOrderViews()
+activate Store
+Store -->> REST: List<OrderView>
+deactivate Store
+REST ->> Store: findAllBulkOrderViews()
+activate Store
+Store -->> REST: List<BulkOrderView>
+deactivate Store
+note over REST
+  Aggregate and compute:
+  - Order counts by status
+  - Bulk order counts by status
+  - Summary statistics
+end note
+REST -->> Client: 200 OK (Dashboard with metrics)
+deactivate REST
+
+Client ->> REST: GET /view/aggregates/accounts
+activate REST
+REST ->> Store: findAllOrderViews()
+activate Store
+Store -->> REST: List<OrderView>
+deactivate Store
+note over REST
+  Group by accountID:
+  - Total amount per account
+  - Total quantity per account
+  - Order counts per status
+end note
+REST -->> Client: 200 OK (Account aggregates)
+deactivate REST
+
+Client ->> REST: GET /view/aggregates/funds
+activate REST
+REST ->> Store: findAllOrderViews()
+activate Store
+Store -->> REST: List<OrderView>
+deactivate Store
+note over REST
+  Group by fundID:
+  - Total amount per fund
+  - Total quantity per fund
+  - Buy/Sell side counts
+end note
+REST -->> Client: 200 OK (Fund aggregates)
+deactivate REST
+
+Client ->> REST: POST /view/replay
+activate REST
+REST ->> REST: Clear all projections
+REST ->> OrderRepo: findAll()
+activate OrderRepo
+OrderRepo -->> REST: All orders
+deactivate OrderRepo
+REST ->> BulkOrderRepo: findAll()
+activate BulkOrderRepo
+BulkOrderRepo -->> REST: All bulk orders
+deactivate BulkOrderRepo
+loop For each Order and BulkOrder
+  REST ->> Store: projectOrder(order, bulkOrder, fund)
+  REST ->> Store: projectBulkOrder(bulkOrder, fund, mappedOrderIDs)
+end
+note over REST, Store
+  Replay: Rebuild entire read model
+  from write-side event log
+end note
+REST -->> Client: 200 OK (Replay complete)
+deactivate REST
+
+Client ->> REST: GET /view/stream (EventSource)
+activate REST
+note over REST
+  Server-Sent Events (SSE)
+  Real-time streaming updates
+end note
+REST -->> Client: 200 OK (Stream established)
+note over REST, Listener
+  When ProjectionListener publishes events,
+  they are streamed to all connected clients
+end note
+deactivate REST
+
+Client ->> REST: GET /view/ui
+activate REST
+REST -->> Client: 200 OK (HTML Dashboard)
+note over Client, REST
+  Interactive web UI with:
+  - Live metrics
+  - Order tables
+  - Real-time updates via SSE
+  - Auto-refresh on stream events
+end note
+deactivate REST
+
+@enduml

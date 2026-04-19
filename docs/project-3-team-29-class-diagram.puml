@@ -1,0 +1,327 @@
+@startuml Order Management System - Layered Class Diagram
+title Order Management System - Comprehensive Layered Class Diagram
+!define LAYER_COLOR_PRESENTATION #FFE4E1
+!define LAYER_COLOR_SERVICE #E1F5FE
+!define LAYER_COLOR_MODEL #F0F4C3
+!define LAYER_COLOR_REPOSITORY #E8F5E9
+!define LAYER_COLOR_READMODEL #F3E5F5
+
+' ============================================================================
+' PRESENTATION LAYER
+' ============================================================================
+package "Presentation Layer (interfaces)" {
+    class OrderRestServer {
+        - httpServer: HttpServer
+        - orderRepository: OrderRepository
+        - bulkOrderRepository: BulkOrderRepository
+        - bulkOrderMappingRepository: BulkOrderMappingRepository
+        - fundRepository: FundRepository
+        - orderStateMachine: OrderStateMachine
+        - projectionStore: ProjectionStore
+        - projectionListener: OrderProjectionListener
+        ---
+        + OrderRestServer(port, orderRepository)
+        + handle(exchange): void
+        # planOrders(): void
+        # listOrders(): void
+        # getOrderStatus(orderID): void
+        # confirmOrders(): void
+        # bookOrders(): void
+    }
+}
+
+' ============================================================================
+' SERVICE/PROCESSOR LAYER
+' ============================================================================
+package "Service/Processor Layer (processor)" {
+    class OrderScheduler {
+        - orderRepository: OrderRepository
+        - orderStateMachine: OrderStateMachine
+        - scheduler: ScheduledExecutorService
+        - pollingTask: ScheduledFuture
+        ---
+        + OrderScheduler(orderRepository, orderStateMachine)
+        + pollAndProcessPendingOrders(): int
+        + startPolling(): void
+        + stopPolling(): void
+    }
+
+    class BatchoutScheduler {
+        - orderRepository: OrderRepository
+        - bulkOrderMappingRepository: BulkOrderMappingRepository
+        - bulkOrderRepository: BulkOrderRepository
+        - fundRepository: FundRepository
+        - projectionListener: OrderProjectionListener
+        - scheduler: ScheduledExecutorService
+        ---
+        + BatchoutScheduler(orderRepository, bulkOrderMappingRepository, bulkOrderRepository)
+        + batchoutPlacedOrders(): List<BulkOrder>
+        + startBatchout(): void
+        + stopBatchout(): void
+    }
+
+    class OrderStateMachine {
+        - orderManager: OrderManager
+        ---
+        + OrderStateMachine(orderManager)
+        + process(order): Order
+        + processBooking(order): Order
+        # advance(order): void
+        # isOmsInternal(status): boolean
+    }
+
+    class OrderManager {
+        - accountRepository: AccountRepository
+        - fundRepository: FundRepository
+        ---
+        + OrderManager(accountRepository, fundRepository)
+        + validate(order): void
+        + enrich(order): void
+        + place(order): void
+        + confirm(order): void
+        + contract(order): void
+        + book(order): void
+    }
+}
+
+' ============================================================================
+' DOMAIN MODEL LAYER
+' ============================================================================
+package "Domain Model Layer (model)" {
+    enum OrderStatus {
+        PLANNED
+        VALIDATED
+        ENRICHED
+        PLACED
+        BULKED
+        CONFIRMED
+        CONTRACTED
+        BOOKED
+        ERRORED
+    }
+
+    enum OrderSide {
+        BUY
+        SELL
+    }
+
+    enum BulkOrderStatus {
+        BULKED
+        CONFIRMED
+        CONTRACTED
+        BOOKED
+    }
+
+    class Order {
+        - orderID: String
+        - productID: String
+        - quantity: BigDecimal
+        - amount: BigDecimal
+        - accountID: String
+        - orderSide: OrderSide
+        - orderStatus: OrderStatus
+        - isProcessed: boolean
+        - errorDescription: String
+        ---
+        + Order()
+        + Order(multiple constructors)
+        + getters/setters for all fields
+    }
+
+    class BulkOrder {
+        - orderID: String
+        - productID: String
+        - orderSide: OrderSide
+        - bulkOrderStatus: BulkOrderStatus
+        - quantity: BigDecimal
+        - amount: BigDecimal
+        - accountID: String
+        ---
+        + BulkOrder()
+        + BulkOrder(multiple constructors)
+        + getters/setters for all fields
+    }
+
+    class Fund {
+        - fundID: String
+        - fundName: String
+        - fundFamily: String
+        - NAV: BigDecimal
+        ---
+        + Fund()
+        + Fund(fundID, fundName, fundFamily, NAV)
+        + getters/setters for all fields
+    }
+
+    class Account {
+        - accountID: String
+        - accountName: String
+        - nationalIdentity: String
+        ---
+        + Account()
+        + Account(accountID, accountName, nationalIdentity)
+        + getters/setters for all fields
+    }
+
+    Order "1" --> "1" OrderSide : uses
+    Order "1" --> "1" OrderStatus : has
+    BulkOrder "1" --> "1" OrderSide : uses
+    BulkOrder "1" --> "1" BulkOrderStatus : has
+}
+
+' ============================================================================
+' REPOSITORY LAYER
+' ============================================================================
+package "Repository Layer (repository)" {
+    interface OrderRepository {
+        {abstract} + save(order): void
+        {abstract} + findAll(): List<Order>
+        {abstract} + findByOrderId(id): Optional<Order>
+        {abstract} + deleteByOrderId(id): void
+    }
+
+    interface BulkOrderRepository {
+        {abstract} + save(bulkOrder): void
+        {abstract} + findAll(): List<BulkOrder>
+        {abstract} + findByBulkOrderId(id): Optional<BulkOrder>
+        {abstract} + deleteByOrderId(id): void
+    }
+
+    interface BulkOrderMappingRepository {
+        {abstract} + saveBulkMapping(bulkOrderId, orderIds): void
+        {abstract} + findIndividualOrderIds(bulkOrderId): Optional<List<String>>
+        {abstract} + deleteMapping(bulkOrderId): void
+    }
+
+    interface FundRepository {
+        {abstract} + save(fund): void
+        {abstract} + findAll(): List<Fund>
+        {abstract} + findByFundId(id): Optional<Fund>
+        {abstract} + existsByFundId(id): boolean
+    }
+
+    interface AccountRepository {
+        {abstract} + save(account): void
+        {abstract} + findAll(): List<Account>
+        {abstract} + findByAccountId(id): Optional<Account>
+        {abstract} + existsByAccountId(id): boolean
+    }
+
+    note right of OrderRepository
+        Repository pattern abstracts
+        data access layer
+    end note
+}
+
+' ============================================================================
+' READ MODEL LAYER (CQRS Pattern)
+' ============================================================================
+package "Read Model Layer (readmodel)" {
+    class OrderView {
+        - orderID: String
+        - accountID: String
+        - fundID: String
+        - fundName: String
+        - orderSide: String
+        - amount: BigDecimal
+        - quantity: BigDecimal
+        - nav: BigDecimal
+        - orderStatus: String
+        - bulkOrderID: String
+        ---
+        + OrderView()
+        + OrderView(multiple fields)
+        + getters/setters for all fields
+    }
+
+    class BulkOrderView {
+        - bulkOrderID: String
+        - fundID: String
+        - fundName: String
+        - orderSide: String
+        - bulkOrderStatus: String
+        - quantity: BigDecimal
+        - amount: BigDecimal
+        - accountID: String
+        - matchedOrderCount: int
+        ---
+        + BulkOrderView()
+        + getters/setters for all fields
+    }
+
+    interface ProjectionStore {
+        {abstract} + projectOrder(order, bulkOrder, fund): void
+        {abstract} + updateOrderView(orderID, order, fund, bulkOrder): void
+        {abstract} + findOrderView(orderID): Optional<OrderView>
+        {abstract} + findOrdersByAccount(accountID): List<OrderView>
+        {abstract} + projectBulkOrder(bulkOrder, fund, orderIDs): void
+        {abstract} + findBulkOrderView(bulkOrderID): Optional<BulkOrderView>
+        {abstract} + clearAll(): void
+    }
+
+    interface OrderProjectionListener {
+        {abstract} + onOrderPlanned(order, fund): void
+        {abstract} + onOrderStatusChanged(order, bulkOrder, fund): void
+        {abstract} + onBulkOrderCreated(bulkOrder, fund, orderIDs): void
+        {abstract} + onBulkOrderStatusChanged(bulkOrder, fund, orderIDs): void
+        {abstract} + onOrderDeleted(orderID): void
+        {abstract} + onBulkOrderDeleted(bulkOrderID): void
+    }
+
+    note right of OrderView
+        Flattened denormalized view
+        optimized for UI consumption
+    end note
+
+    note right of ProjectionStore
+        CQRS read-side store
+        Bridge between write and read models
+    end note
+}
+
+' ============================================================================
+' DEPENDENCIES AND RELATIONSHIPS
+' ============================================================================
+
+' Presentation Layer depends on Service and Repository
+OrderRestServer --> OrderRepository : uses
+OrderRestServer --> BulkOrderRepository : uses
+OrderRestServer --> BulkOrderMappingRepository : uses
+OrderRestServer --> FundRepository : uses
+OrderRestServer --> OrderStateMachine : uses
+OrderRestServer --> ProjectionStore : uses
+OrderRestServer --> OrderProjectionListener : uses
+
+' Service Layer dependencies
+OrderScheduler --> OrderRepository : uses
+OrderScheduler --> OrderStateMachine : uses
+BatchoutScheduler --> OrderRepository : uses
+BatchoutScheduler --> BulkOrderRepository : uses
+BatchoutScheduler --> BulkOrderMappingRepository : uses
+BatchoutScheduler --> FundRepository : uses
+BatchoutScheduler --> OrderProjectionListener : uses
+OrderStateMachine --> OrderManager : uses
+OrderManager --> AccountRepository : uses
+OrderManager --> FundRepository : uses
+
+' Domain Model relationships
+Order "many" --> "1" Account : references via accountID
+Order "many" --> "1" Fund : references via productID
+BulkOrder "many" --> "1" Account : references via accountID
+BulkOrder "many" --> "1" Fund : references via productID
+
+' Repository implementations
+OrderRepository --> Order : manages
+BulkOrderRepository --> BulkOrder : manages
+FundRepository --> Fund : manages
+AccountRepository --> Account : manages
+
+' Read Model connections
+OrderView --> Order : denormalizes
+OrderView --> Fund : includes data from
+BulkOrderView --> BulkOrder : denormalizes
+ProjectionStore --> OrderView : stores
+ProjectionStore --> BulkOrderView : stores
+OrderProjectionListener --> ProjectionStore : updates
+
+@enduml
