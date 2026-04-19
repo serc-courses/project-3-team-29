@@ -42,6 +42,7 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -71,6 +72,8 @@ public class OrderRestServer {
     private static final String AUTH_LOGIN_PATH = "/auth/login";
     private static final String AUTH_ME_PATH = "/auth/me";
     private static final String AUTH_LOGOUT_PATH = "/auth/logout";
+
+    private static final String VIEW_USERS_PATH = "/view/users";
 
     private static final String ADVISOR_ME_PATH = "/advisor/me";
     private static final String ADVISOR_CLIENTS_PATH = "/advisor/clients";
@@ -174,6 +177,7 @@ public class OrderRestServer {
         this.httpServer.createContext(AUTH_LOGIN_PATH, withCors(new AuthLoginHandler()));
         this.httpServer.createContext(AUTH_ME_PATH, withCors(new AuthMeHandler()));
         this.httpServer.createContext(AUTH_LOGOUT_PATH, withCors(new AuthLogoutHandler()));
+        this.httpServer.createContext(VIEW_USERS_PATH, withCors(new ViewUsersHandler()));
         this.httpServer.setExecutor(Executors.newFixedThreadPool(16));
     }
 
@@ -1210,6 +1214,54 @@ public class OrderRestServer {
                 return;
             }
             sendJsonResponse(exchange, 200, userToResponse(session.getUser()));
+        }
+    }
+
+    private final class ViewUsersHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only GET is supported"));
+                return;
+            }
+            if (userRepository == null) {
+                sendJsonResponse(exchange, 500, Map.of("message", "User repository is not configured"));
+                return;
+            }
+
+            List<User> users = userRepository.findAll();
+            List<Advisor> advisors = advisorRepository != null ? advisorRepository.findAll() : List.of();
+            Map<String, Advisor> advisorMap = advisors.stream()
+                    .collect(Collectors.toMap(Advisor::getAdvisorID, a -> a));
+
+            // Build advisor -> client accounts mapping
+            Map<String, List<String>> advisorClients = new HashMap<>();
+            if (advisorClientRelationshipRepository != null) {
+                advisorClientRelationshipRepository.findAll().forEach(rel ->
+                    advisorClients.computeIfAbsent(rel.getAdvisorID(), k -> new ArrayList<>()).add(rel.getAccountID())
+                );
+            }
+
+            List<Map<String, Object>> userList = users.stream().map(u -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("userID", u.getUserID());
+                row.put("username", u.getUsername());
+                row.put("role", u.getRole());
+                row.put("displayName", u.getDisplayName());
+                row.put("accountID", u.getAccountID());
+                row.put("advisorID", u.getAdvisorID());
+                if ("ADVISOR".equals(u.getRole()) && u.getAdvisorID() != null) {
+                    Advisor adv = advisorMap.get(u.getAdvisorID());
+                    if (adv != null) {
+                        row.put("advisorEmail", adv.getEmail());
+                    }
+                    row.put("clientAccounts", advisorClients.getOrDefault(u.getAdvisorID(), List.of()));
+                }
+                return row;
+            }).sorted(Comparator.comparing(m -> (String) m.get("userID")))
+              .collect(Collectors.toList());
+
+            sendJsonResponse(exchange, 200, userList);
         }
     }
 

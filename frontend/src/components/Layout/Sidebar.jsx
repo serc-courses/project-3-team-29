@@ -64,12 +64,24 @@ const IconAccounts = () => (
   </svg>
 )
 
+const IconUsers = () => (
+  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+    <circle cx="5.5" cy="4.5" r="2.2" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M0.5 13C0.5 10.8 2.7 9 5.5 9C6.4 9 7.3 9.2 8 9.6"
+      stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <circle cx="11" cy="6" r="2" stroke="currentColor" strokeWidth="1.3" />
+    <path d="M7.5 14C7.5 12 9 10.5 11 10.5C13 10.5 14.5 12 14.5 14"
+      stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+  </svg>
+)
+
 const NAV_ICONS = {
   dashboard: <IconDashboard />,
   orders:    <IconOrders />,
   bulk:      <IconBulk />,
   funds:     <IconFunds />,
   accounts:  <IconAccounts />,
+  users:     <IconUsers />,
 }
 
 /* ─── Toast ──────────────────────────────────────────────────────────────────── */

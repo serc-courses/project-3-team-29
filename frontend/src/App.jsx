@@ -6,6 +6,7 @@ import Orders from './pages/Orders'
 import BulkOrders from './pages/BulkOrders'
 import Funds from './pages/Funds'
 import Accounts from './pages/Accounts'
+import Users from './pages/Users'
 import NewOrder from './pages/NewOrder'
 import { useSse } from './hooks/useSse'
 
@@ -34,6 +35,7 @@ function App() {
           <Route path="/bulk-orders" element={<BulkOrders />} />
           <Route path="/funds" element={<Funds />} />
           <Route path="/accounts" element={<Accounts />} />
+          <Route path="/users" element={<Users />} />
           <Route path="/orders/new" element={<NewOrder />} />
         </Routes>
       </Layout>
