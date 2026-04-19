@@ -1,6 +1,8 @@
 package com.iiit.oms;
 
 import com.iiit.oms.db.postgres.PostgresAccountDatabase;
+import com.iiit.oms.db.postgres.PostgresAdvisorClientRelationshipDatabase;
+import com.iiit.oms.db.postgres.PostgresAdvisorDatabase;
 import com.iiit.oms.db.postgres.PostgresBulkOrderDatabase;
 import com.iiit.oms.db.postgres.PostgresBulkOrderMappingDatabase;
 import com.iiit.oms.db.postgres.PostgresFundDatabase;
@@ -18,16 +20,24 @@ import com.iiit.oms.readmodel.impl.DefaultOrderProjectionListener;
 import com.iiit.oms.readmodel.impl.InMemoryProjectionStore;
 import com.iiit.oms.readmodel.impl.MongoDbProjectionStore;
 import com.iiit.oms.repository.AccountRepository;
+import com.iiit.oms.repository.AdvisorClientRelationshipRepository;
+import com.iiit.oms.repository.AdvisorRepository;
 import com.iiit.oms.repository.BulkOrderRepository;
 import com.iiit.oms.repository.FundRepository;
 import com.iiit.oms.repository.OrderRepository;
+import com.iiit.oms.repository.UserRepository;
+import com.iiit.oms.repository.inmemory.InMemoryUserRepository;
 import com.iiit.oms.repository.postgres.PostgresAccountRepository;
+import com.iiit.oms.repository.postgres.PostgresAdvisorClientRelationshipRepository;
+import com.iiit.oms.repository.postgres.PostgresAdvisorRepository;
 import com.iiit.oms.repository.postgres.PostgresBulkOrderMappingRepository;
 import com.iiit.oms.repository.postgres.PostgresBulkOrderRepository;
 import com.iiit.oms.repository.postgres.PostgresFundRepository;
 import com.iiit.oms.repository.postgres.PostgresOrderRepository;
 import com.iiit.oms.util.AccountMockDataUtil;
+import com.iiit.oms.util.AdvisorMockDataUtil;
 import com.iiit.oms.util.FundMockDataUtil;
+import com.iiit.oms.util.UserSeedDataUtil;
 
 import java.io.IOException;
 
@@ -49,6 +59,14 @@ public class OmsApplication {
         FundRepository fundRepository = new PostgresFundRepository(new PostgresFundDatabase(connectionFactory));
         seedFundsIfMissing(fundRepository);
 
+        AdvisorRepository advisorRepository = new PostgresAdvisorRepository(new PostgresAdvisorDatabase(connectionFactory));
+        AdvisorClientRelationshipRepository relationshipRepository =
+                new PostgresAdvisorClientRelationshipRepository(new PostgresAdvisorClientRelationshipDatabase(connectionFactory));
+        AdvisorMockDataUtil.seedIfMissing(advisorRepository, relationshipRepository);
+
+        UserRepository userRepository = new InMemoryUserRepository();
+        UserSeedDataUtil.seedIfMissing(userRepository);
+
         OrderRepository orderRepository = new PostgresOrderRepository(new PostgresOrderDatabase(connectionFactory));
         OrderStateMachine orderStateMachine = new OrderStateMachine(new OrderManager(accountRepository, fundRepository));
         OrderScheduler orderScheduler = new OrderScheduler(orderRepository, orderStateMachine);
@@ -59,6 +77,7 @@ public class OmsApplication {
         PostgresBulkOrderMappingRepository bulkOrderMappingRepository = new PostgresBulkOrderMappingRepository(new PostgresBulkOrderMappingDatabase(connectionFactory));
         BulkOrderRepository bulkOrderRepository = new PostgresBulkOrderRepository(new PostgresBulkOrderDatabase(connectionFactory));
         BatchoutScheduler batchoutScheduler = new BatchoutScheduler(orderRepository, bulkOrderMappingRepository, bulkOrderRepository, fundRepository, projectionListener);
+
         OrderRestServer orderRestServer = new OrderRestServer(
             SERVER_PORT,
             orderRepository,
@@ -67,7 +86,11 @@ public class OmsApplication {
             fundRepository,
             orderStateMachine,
             projectionStore,
-            projectionListener
+            projectionListener,
+            accountRepository,
+            advisorRepository,
+            relationshipRepository,
+            userRepository
         );
 
         orderRestServer.start();
@@ -90,18 +113,33 @@ public class OmsApplication {
         System.out.println("Postgres clean start: " + cleanStart + " (set " + CLEAN_START_ENV_VAR + "=true to wipe tables on startup)");
         System.out.println("Seeded default accounts count: " + accountRepository.findAll().size());
         System.out.println("Seeded default funds count: " + fundRepository.findAll().size());
-        System.out.println("  POST /orders/plan - Plan new orders");
-        System.out.println("  GET  /orders - List all orders");
-        System.out.println("  GET  /orders/status?orderID=<ID> - Get status by order ID");
-        System.out.println("  POST /orders/confirm - Confirm BULKED bulk orders and mapped individual orders");
-        System.out.println("  POST /orders/book - Book CONFIRMED bulk orders and mapped individual orders");
-        System.out.println("  GET  /view/orders - Query projected order read model");
-        System.out.println("  GET  /view/bulk-orders - Query projected bulk-order read model");
-        System.out.println("  GET  /view/dashboard - Dashboard summary for read model");
-        System.out.println("  GET  /view/stream - SSE stream for real-time read-model updates");
-        System.out.println("  GET  /view/ui - Live dashboard UI");
+        System.out.println("Seeded advisors count: " + advisorRepository.findAll().size());
+        System.out.println("Seeded users count:    " + userRepository.findAll().size());
+        System.out.println("--- OMS Endpoints ---");
+        System.out.println("  POST /orders/plan             - Plan new orders");
+        System.out.println("  GET  /orders                  - List all orders");
+        System.out.println("  GET  /orders/status?orderID=  - Get status by order ID");
+        System.out.println("  POST /orders/confirm          - Confirm BULKED bulk orders");
+        System.out.println("  POST /orders/book             - Book CONFIRMED bulk orders");
+        System.out.println("  GET  /view/orders             - Query projected order read model");
+        System.out.println("  GET  /view/bulk-orders        - Query projected bulk-order read model");
+        System.out.println("  GET  /view/dashboard          - Dashboard summary");
+        System.out.println("  GET  /view/stream             - SSE stream for real-time updates");
+        System.out.println("  GET  /view/ui                 - Live dashboard UI");
+        System.out.println("--- Auth Endpoints ---");
+        System.out.println("  POST /auth/login              - Login (username + password → token)");
+        System.out.println("  GET  /auth/me                 - Get current user from token");
+        System.out.println("  POST /auth/logout             - Invalidate token");
+        System.out.println("--- User Frontend Endpoints ---");
+        System.out.println("  GET  /accounts                - List investor accounts");
+        System.out.println("  POST /auth/login              - Investor login");
+        System.out.println("--- Advisor Endpoints ---");
+        System.out.println("  GET  /advisor/me              - Advisor identity (X-Advisor-ID header)");
+        System.out.println("  GET  /advisor/clients         - Advisor's client list with aggregates");
+        System.out.println("  GET  /advisor/orders          - All orders for advisor's clients");
+        System.out.println("  POST /advisor/orders/plan     - Plan orders on behalf of clients");
+        System.out.println("  GET  /advisor/dashboard       - Advisor book summary");
         System.out.println("Read model backend: " + projectionStore.getStatus());
-        System.out.println("Order flow includes BULKED between PLACED and CONFIRMED");
     }
 
     private static void seedAccountsIfMissing(AccountRepository accountRepository) {

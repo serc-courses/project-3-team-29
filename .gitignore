@@ -1,24 +1,62 @@
-# Maven build output
+# ─── Java / Maven ────────────────────────────────────────────────
 /target/
-
-# Maven wrapper jar download cache
 .mvn/wrapper/maven-wrapper.jar
-
-# Logs
-*.log
-
-# OS/editor files
-.DS_Store
-.vscode/
-.idea/
-*.iml
-
-# Java artifacts
 *.class
 *.jar
 *.war
 *.ear
 
-# Frontend
+# ─── Logs ────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── Frontend — admin ────────────────────────────────────────────
 frontend/node_modules/
 frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+
+# ─── Frontend — user + advisor ───────────────────────────────────
+user-frontend/node_modules/
+user-frontend/dist/
+user-frontend/.env
+user-frontend/.env.local
+user-frontend/.env.*.local
+
+# ─── Environment / secrets ───────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.env
+
+# ─── OS & editor ─────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+
+# ─── Node generic ────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.pnpm-store/
+
+# ─── Vite cache ──────────────────────────────────────────────────
+.vite/
+**/.vite/
+
+# ─── Testing ─────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ─── Misc ────────────────────────────────────────────────────────
+*.tmp
+*.bak
+*.orig

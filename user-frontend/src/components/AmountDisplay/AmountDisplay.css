@@ -1,0 +1,19 @@
+.amount-display {
+  font-family: var(--font-mono);
+  font-feature-settings: 'tnum';
+  font-weight: 600;
+  color: var(--color-text-900);
+}
+
+.amount-display--sm {
+  font-size: var(--text-sm);
+}
+
+.amount-display--md {
+  font-size: var(--text-base);
+}
+
+.amount-display--lg {
+  font-size: var(--text-3xl);
+  letter-spacing: -0.02em;
+}

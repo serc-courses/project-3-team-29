@@ -1,0 +1,38 @@
+.advisor-basket-page { min-height: 100dvh; background: var(--color-bg); }
+.advisor-basket-form { padding: var(--sp-4); padding-bottom: 120px; display: flex; flex-direction: column; gap: var(--sp-3); }
+
+@media (min-width: 768px) {
+  .advisor-basket-form {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    column-gap: var(--sp-5);
+    align-items: start;
+    padding-bottom: 80px;
+  }
+
+  /* Basket rows and add button stay in left column */
+  .advisor-basket-section-label,
+  .advisor-basket-row,
+  .advisor-add-row {
+    grid-column: 1;
+  }
+
+  /* Summary card: auto-placed at col 2 row 1, sticks as user scrolls */
+  .advisor-basket-summary {
+    grid-column: 2;
+    position: sticky;
+    top: 72px;
+    align-self: start;
+  }
+}
+.advisor-basket-section-label { font-size: var(--text-sm); font-weight: 600; color: var(--color-text-500); text-transform: uppercase; letter-spacing: .05em; }
+.advisor-basket-row { display: flex; flex-direction: column; gap: 0; }
+.advisor-basket-row-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-3); }
+.advisor-basket-row-num { font-size: var(--text-sm); font-weight: 600; color: var(--color-primary); }
+.advisor-basket-remove { background: none; border: none; cursor: pointer; color: var(--color-text-400); padding: var(--sp-1); -webkit-tap-highlight-color: transparent; }
+.advisor-add-row { border-style: dashed; }
+.advisor-basket-summary { background: var(--color-bg-secondary); border-color: var(--color-border-light); }
+.advisor-basket-summary-title { font-size: var(--text-sm); font-weight: 600; color: var(--color-text-500); text-transform: uppercase; letter-spacing: .05em; margin-bottom: var(--sp-3); }
+.advisor-basket-summary-row { display: flex; justify-content: space-between; align-items: center; padding: var(--sp-2) 0; border-bottom: 1px solid var(--color-border-light); font-size: var(--text-sm); color: var(--color-text-700); }
+.advisor-basket-summary-row:last-child { border-bottom: none; }
+.advisor-basket-summary-row span:first-child { color: var(--color-text-500); }

@@ -35,6 +35,12 @@
   margin-bottom: var(--spacing-4);
 }
 
+.dashboard-chart-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* States */
 .dashboard-loading {
   display: flex;
