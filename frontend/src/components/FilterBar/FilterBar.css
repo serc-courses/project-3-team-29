@@ -1,0 +1,86 @@
+.filter-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--spacing-3);
+  padding: var(--spacing-3) var(--spacing-4);
+  background: #ffffff;
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-xl);
+  margin-bottom: var(--spacing-4);
+  flex-wrap: wrap;
+  box-shadow: var(--shadow-1);
+}
+
+.filter-bar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-bar-label {
+  font-size: var(--text-micro);
+  font-weight: 400;
+  font-feature-settings: "ss01";
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-gray-500);
+}
+
+.filter-bar select {
+  padding: 6px 10px;
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 300;
+  font-feature-settings: "ss01";
+  color: var(--color-gray-900);
+  background: var(--color-gray-50);
+  cursor: pointer;
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  -webkit-appearance: none;
+}
+.filter-bar select:focus {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(20,184,166,0.15);
+}
+
+/* Search input */
+.filter-bar-search {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  flex: 1;
+  min-width: 200px;
+  background: var(--color-gray-50);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.filter-bar-search:focus-within {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(20,184,166,0.15);
+  background: #ffffff;
+}
+.filter-bar-search-icon {
+  display: flex;
+  align-items: center;
+  color: var(--color-gray-400);
+  flex-shrink: 0;
+}
+.filter-bar-search input {
+  flex: 1;
+  border: none;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 0.8125rem;
+  font-weight: 300;
+  font-feature-settings: "ss01";
+  color: var(--color-gray-900);
+  outline: none;
+}
+.filter-bar-search input::placeholder {
+  color: var(--color-gray-400);
+}

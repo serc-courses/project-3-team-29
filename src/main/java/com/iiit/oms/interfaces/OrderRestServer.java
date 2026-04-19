@@ -108,20 +108,43 @@ public class OrderRestServer {
         this.objectMapper = new ObjectMapper();
         this.sseClients = new CopyOnWriteArrayList<>();
         this.httpServer = HttpServer.create(new InetSocketAddress(port), 0);
-        this.httpServer.createContext(PLAN_ORDERS_PATH, new PlanOrdersHandler());
-        this.httpServer.createContext(LIST_ORDERS_PATH, new ListOrdersHandler());
-        this.httpServer.createContext(ORDER_STATUS_PATH, new OrderStatusHandler());
-        this.httpServer.createContext(CONFIRM_ORDERS_PATH, new ConfirmOrdersHandler());
-        this.httpServer.createContext(BOOK_ORDERS_PATH, new BookOrdersHandler());
-        this.httpServer.createContext(VIEW_ORDERS_PATH, new ViewOrdersHandler());
-        this.httpServer.createContext(VIEW_BULK_ORDERS_PATH, new ViewBulkOrdersHandler());
-        this.httpServer.createContext(VIEW_DASHBOARD_PATH, new ViewDashboardHandler());
-        this.httpServer.createContext(VIEW_AGGREGATES_ACCOUNTS_PATH, new ViewAggregateAccountsHandler());
-        this.httpServer.createContext(VIEW_AGGREGATES_FUNDS_PATH, new ViewAggregateFundsHandler());
-        this.httpServer.createContext(VIEW_REPLAY_PATH, new ViewReplayHandler());
-        this.httpServer.createContext(VIEW_STREAM_PATH, new ViewStreamHandler());
-        this.httpServer.createContext(VIEW_UI_PATH, new ViewUiHandler());
+        this.httpServer.createContext(PLAN_ORDERS_PATH, withCors(new PlanOrdersHandler()));
+        this.httpServer.createContext(LIST_ORDERS_PATH, withCors(new ListOrdersHandler()));
+        this.httpServer.createContext(ORDER_STATUS_PATH, withCors(new OrderStatusHandler()));
+        this.httpServer.createContext(CONFIRM_ORDERS_PATH, withCors(new ConfirmOrdersHandler()));
+        this.httpServer.createContext(BOOK_ORDERS_PATH, withCors(new BookOrdersHandler()));
+        this.httpServer.createContext(VIEW_ORDERS_PATH, withCors(new ViewOrdersHandler()));
+        this.httpServer.createContext(VIEW_BULK_ORDERS_PATH, withCors(new ViewBulkOrdersHandler()));
+        this.httpServer.createContext(VIEW_DASHBOARD_PATH, withCors(new ViewDashboardHandler()));
+        this.httpServer.createContext(VIEW_AGGREGATES_ACCOUNTS_PATH, withCors(new ViewAggregateAccountsHandler()));
+        this.httpServer.createContext(VIEW_AGGREGATES_FUNDS_PATH, withCors(new ViewAggregateFundsHandler()));
+        this.httpServer.createContext(VIEW_REPLAY_PATH, withCors(new ViewReplayHandler()));
+        this.httpServer.createContext(VIEW_STREAM_PATH, withCors(new ViewStreamHandler()));
+        this.httpServer.createContext(VIEW_UI_PATH, withCors(new ViewUiHandler()));
         this.httpServer.setExecutor(Executors.newFixedThreadPool(12));
+    }
+
+    private static final String CORS_ORIGIN_ENV_VAR = "OMS_CORS_ORIGIN";
+
+    private String getAllowedOrigin() {
+        String origin = System.getenv(CORS_ORIGIN_ENV_VAR);
+        return (origin == null || origin.isBlank()) ? "*" : origin;
+    }
+
+    private HttpHandler withCors(HttpHandler handler) {
+        return exchange -> {
+            exchange.getResponseHeaders().add("Access-Control-Allow-Origin", getAllowedOrigin());
+            exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+            exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(204, -1);
+                exchange.close();
+                return;
+            }
+
+            handler.handle(exchange);
+        };
     }
 
     public void start() {

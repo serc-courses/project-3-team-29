@@ -42,10 +42,10 @@ for i in {1..100}; do
   # Alternate between BUY and SELL
   if (( i % 2 == 1 )); then
     order_side="BUY"
-    ((buy_count++))
+    (( buy_count++ )) || true
   else
     order_side="SELL"
-    ((sell_count++))
+    (( sell_count++ )) || true
   fi
   
   # Generate amount based on order index
@@ -60,7 +60,7 @@ for i in {1..100}; do
   printf '  {"productID":"%s","amount":%s,"accountID":"%s","orderSide":"%s"}' \
     "$fund_id" "$amount" "$account_id" "$order_side" >> "$tmp_payload"
   
-  ((order_index++))
+  (( order_index++ )) || true
 done
 
 printf '\n]\n' >> "$tmp_payload"

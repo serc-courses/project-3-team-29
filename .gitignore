@@ -18,3 +18,7 @@
 *.jar
 *.war
 *.ear
+
+# Frontend
+frontend/node_modules/
+frontend/dist/

@@ -1,0 +1,25 @@
+import { ORDER_STATUS, BULK_ORDER_STATUS } from './orderStatus';
+
+export const ORDER_STATUS_COLORS = {
+  [ORDER_STATUS.PLANNED]:    { bg: '#F1F5F9', text: '#64748B', border: '#CBD5E1' },
+  [ORDER_STATUS.VALIDATED]:  { bg: '#E0F2FE', text: '#0369A1', border: '#BAE6FD' },
+  [ORDER_STATUS.ENRICHED]:   { bg: '#ECFEFF', text: '#0E7490', border: '#A5F3FC' },
+  [ORDER_STATUS.PLACED]:     { bg: '#F0FDFA', text: '#0D9488', border: '#99F6E4' },
+  [ORDER_STATUS.BULKED]:     { bg: '#FFFBEB', text: '#B45309', border: '#FDE68A' },
+  [ORDER_STATUS.CONFIRMED]:  { bg: '#CCFBF1', text: '#0F766E', border: '#5EEAD4' },
+  [ORDER_STATUS.CONTRACTED]: { bg: '#E0F2FE', text: '#0369A1', border: '#7DD3FC' },
+  [ORDER_STATUS.BOOKED]:     { bg: '#DCFCE7', text: '#15803D', border: '#86EFAC' },
+  [ORDER_STATUS.ERRORED]:    { bg: '#FEF2F2', text: '#DC2626', border: '#FECACA' },
+};
+
+export const BULK_STATUS_COLORS = {
+  [BULK_ORDER_STATUS.BULKED]:      ORDER_STATUS_COLORS[ORDER_STATUS.BULKED],
+  [BULK_ORDER_STATUS.CONFIRMED]:   ORDER_STATUS_COLORS[ORDER_STATUS.CONFIRMED],
+  [BULK_ORDER_STATUS.CONTRACTED]:  ORDER_STATUS_COLORS[ORDER_STATUS.CONTRACTED],
+  [BULK_ORDER_STATUS.BOOKED]:      ORDER_STATUS_COLORS[ORDER_STATUS.BOOKED],
+};
+
+export const CHART_COLORS = [
+  '#14B8A6', '#10B981', '#F59E0B', '#EF4444',
+  '#0EA5E9', '#6366F1', '#06B6D4', '#84CC16', '#F97316',
+];
