@@ -1,0 +1,63 @@
+.order-card-link {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+}
+
+.order-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.order-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+.order-card-fund {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.order-card-side {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  letter-spacing: 0.03em;
+}
+
+.order-card-mid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.order-card-id {
+  font-size: var(--text-sm);
+  color: var(--color-text-500);
+}
+
+.order-card-amount {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--color-text-900);
+}
+
+.order-card-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.order-card-account {
+  font-size: var(--text-xs);
+}

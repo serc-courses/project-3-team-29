@@ -1,0 +1,97 @@
+/* Top section: filters + chart stacked on mobile, side-by-side on desktop */
+.advisor-activity-top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-3);
+}
+
+.advisor-activity-filters { display: flex; flex-direction: column; gap: var(--sp-2); }
+.advisor-activity-filter-row { display: flex; gap: var(--sp-2); }
+
+/* Mini chart card */
+.advisor-activity-chart {
+  padding: var(--sp-3) var(--sp-4);
+  overflow: hidden;
+}
+
+/* Summary strip */
+.advisor-activity-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+.activity-pill {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-2) var(--sp-3);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  box-shadow: var(--shadow-sm);
+}
+
+.activity-pill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.activity-pill-value {
+  font-size: var(--text-sm);
+  font-weight: 700;
+  color: var(--color-text-900);
+}
+
+.activity-pill-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-400);
+}
+
+@media (min-width: 768px) {
+  .advisor-activity-top {
+    flex-direction: row;
+    align-items: flex-start;
+  }
+
+  .advisor-activity-filters {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .advisor-activity-chart {
+    width: 280px;
+    flex-shrink: 0;
+  }
+
+  .advisor-activity-summary {
+    grid-template-columns: repeat(6, 1fr);
+  }
+
+  .advisor-activity-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-3);
+  }
+}
+
+@media (min-width: 1024px) {
+  .advisor-activity-chart { width: 340px; }
+
+  .advisor-activity-list {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+.advisor-filter-select { flex: 1; font-size: var(--text-sm); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 8px 10px; background: var(--color-surface); color: var(--color-text-700); outline: none; min-height: 40px; }
+.advisor-activity-list { display: flex; flex-direction: column; gap: var(--sp-2); }
+.advisor-activity-card { display: flex; flex-direction: column; gap: var(--sp-2); align-items: flex-start; width: 100%; text-align: left; }
+.advisor-activity-card-top { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.advisor-activity-account { font-size: var(--text-sm); font-weight: 700; color: var(--color-text-900); }
+.advisor-activity-card-mid { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.advisor-activity-fund { font-size: var(--text-sm); color: var(--color-text-700); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
+.advisor-activity-amount { font-size: var(--text-sm); font-weight: 600; color: var(--color-text-900); }
+.advisor-activity-card-bottom { display: flex; align-items: center; justify-content: space-between; width: 100%; }

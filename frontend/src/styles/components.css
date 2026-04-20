@@ -1,0 +1,166 @@
+/* ─── Card ───────────────────────────────────────────────────────────────────── */
+.card {
+  background: #ffffff;
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
+  box-shadow: var(--shadow-3);
+  transition: box-shadow var(--transition-normal);
+}
+.card:hover {
+  box-shadow: rgba(50,50,93,0.30) 0px 30px 45px -30px, rgba(0,0,0,0.12) 0px 18px 36px -18px;
+}
+
+/* ─── Buttons ────────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2);
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: 400;
+  font-feature-settings: "ss01";
+  line-height: 1;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
+
+/* Primary */
+.btn-primary {
+  background: var(--color-primary-500);
+  color: #ffffff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-primary-700);
+}
+
+/* Success */
+.btn-success {
+  background: var(--color-success);
+  color: #ffffff;
+}
+.btn-success:hover:not(:disabled) {
+  background: var(--color-success-text);
+}
+
+/* Warning */
+.btn-warning {
+  background: var(--color-warning);
+  color: #ffffff;
+}
+
+/* Danger */
+.btn-danger {
+  background: var(--color-error);
+  color: #ffffff;
+}
+
+/* Ghost / Outlined — Stripe "secondary" */
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--color-primary-200);
+  color: var(--color-primary-600);
+}
+.btn-outline:hover:not(:disabled) {
+  background: var(--color-primary-50);
+  border-color: var(--color-primary-500);
+}
+
+/* ─── Form Inputs ────────────────────────────────────────────────────────────── */
+.form-input,
+.form-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 300;
+  font-feature-settings: "ss01";
+  color: var(--color-gray-900);
+  background: #ffffff;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  outline: none;
+  -webkit-appearance: none;
+}
+.form-input:focus,
+.form-select:focus {
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(20,184,166,0.15);
+}
+.form-input::placeholder {
+  color: var(--color-gray-500);
+  font-weight: 300;
+}
+
+.form-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 400;
+  font-feature-settings: "ss01";
+  color: var(--color-gray-700);
+  margin-bottom: var(--spacing-1);
+  letter-spacing: 0;
+}
+
+/* ─── Toast ──────────────────────────────────────────────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: var(--spacing-6);
+  right: var(--spacing-6);
+  padding: 10px 16px;
+  border-radius: var(--radius-sm);
+  color: #ffffff;
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 400;
+  font-feature-settings: "ss01";
+  box-shadow: var(--shadow-4);
+  z-index: 1000;
+  animation: slideUp 0.25s ease;
+}
+.toast-success { background: var(--color-success); }
+.toast-error   { background: var(--color-error); }
+.toast-warning { background: var(--color-warning); }
+
+@keyframes slideUp {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* ─── Spinner ────────────────────────────────────────────────────────────────── */
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--color-gray-200);
+  border-top-color: var(--color-primary-500);
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Empty state ────────────────────────────────────────────────────────────── */
+.empty-state {
+  text-align: center;
+  padding: var(--spacing-8);
+  color: var(--color-gray-400);
+  font-size: 0.875rem;
+  font-feature-settings: "ss01";
+}

@@ -1,0 +1,65 @@
+.dashboard-page {}
+
+/* Summary cards grid */
+.dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-6);
+}
+@media (max-width: 1024px) {
+  .dashboard-cards { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .dashboard-cards { grid-template-columns: 1fr; }
+}
+
+/* Charts row */
+.dashboard-charts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-4);
+  margin-bottom: var(--spacing-4);
+}
+@media (max-width: 768px) {
+  .dashboard-charts { grid-template-columns: 1fr; }
+}
+
+.dashboard-section-title {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  font-feature-settings: "ss01";
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-gray-500);
+  margin-bottom: var(--spacing-4);
+}
+
+.dashboard-chart-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* States */
+.dashboard-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 280px;
+  gap: var(--spacing-3);
+  color: var(--color-gray-400);
+  font-size: 0.875rem;
+  font-feature-settings: "ss01";
+}
+
+.dashboard-error {
+  padding: var(--spacing-4);
+  background: rgba(234,34,97,0.06);
+  border: 1px solid rgba(234,34,97,0.25);
+  border-radius: var(--radius-sm);
+  color: var(--color-error);
+  font-size: 0.875rem;
+  font-feature-settings: "ss01";
+  margin-bottom: var(--spacing-4);
+}

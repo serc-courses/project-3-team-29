@@ -1,0 +1,59 @@
+.funds-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--sp-2);
+}
+
+.funds-search-icon {
+  position: absolute;
+  left: var(--sp-3);
+  color: var(--color-text-400);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.funds-search-input {
+  width: 100%;
+  padding: var(--sp-3) var(--sp-4) var(--sp-3) 40px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  color: var(--color-text-900);
+  background: var(--color-surface);
+  min-height: 44px;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.funds-search-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-100);
+}
+
+.funds-search-clear {
+  position: absolute;
+  right: var(--sp-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-400);
+  display: flex;
+  align-items: center;
+  padding: var(--sp-1);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.funds-count {
+  font-size: var(--text-sm);
+  color: var(--color-text-500);
+  margin-bottom: var(--sp-4);
+}
+
+.funds-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}

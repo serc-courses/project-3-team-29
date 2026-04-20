@@ -1,0 +1,64 @@
+.orders-page {}
+
+.orders-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-5);
+}
+.orders-page-header h2 {
+  font-size: var(--text-xl);
+  font-weight: 300;
+  font-feature-settings: "ss01";
+  letter-spacing: -0.22px;
+  color: var(--color-gray-900);
+}
+
+.orders-count {
+  font-size: var(--text-xs);
+  font-feature-settings: "ss01";
+  color: var(--color-gray-500);
+  margin-bottom: var(--spacing-3);
+}
+
+.orders-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 280px;
+  gap: var(--spacing-3);
+  color: var(--color-gray-400);
+  font-size: 0.875rem;
+  font-feature-settings: "ss01";
+}
+
+.orders-error {
+  padding: var(--spacing-4);
+  background: rgba(234,34,97,0.06);
+  border: 1px solid rgba(234,34,97,0.25);
+  border-radius: var(--radius-sm);
+  color: var(--color-error);
+  font-size: 0.875rem;
+  font-feature-settings: "ss01";
+}
+
+/* Fund name cell truncation */
+.fund-name-cell {
+  display: block;
+  max-width: 200px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* BUY / SELL side coloring */
+.side-buy {
+  color: var(--color-success-text);
+  font-weight: 400;
+  font-feature-settings: "ss01";
+}
+.side-sell {
+  color: var(--color-error);
+  font-weight: 400;
+  font-feature-settings: "ss01";
+}

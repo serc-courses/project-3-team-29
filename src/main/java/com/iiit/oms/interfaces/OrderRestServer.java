@@ -14,6 +14,15 @@ import com.iiit.oms.readmodel.BulkOrderView;
 import com.iiit.oms.readmodel.OrderProjectionListener;
 import com.iiit.oms.readmodel.OrderView;
 import com.iiit.oms.readmodel.ProjectionStore;
+import com.iiit.oms.model.Account;
+import com.iiit.oms.model.Advisor;
+import com.iiit.oms.model.AdvisorClientRelationship;
+import com.iiit.oms.model.User;
+import com.iiit.oms.model.UserSession;
+import com.iiit.oms.repository.AccountRepository;
+import com.iiit.oms.repository.AdvisorClientRelationshipRepository;
+import com.iiit.oms.repository.AdvisorRepository;
+import com.iiit.oms.repository.UserRepository;
 import com.iiit.oms.repository.BulkOrderMappingRepository;
 import com.iiit.oms.repository.BulkOrderRepository;
 import com.iiit.oms.repository.FundRepository;
@@ -33,10 +42,12 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
@@ -57,12 +68,29 @@ public class OrderRestServer {
     private static final String VIEW_REPLAY_PATH = "/view/replay";
     private static final String VIEW_STREAM_PATH = "/view/stream";
     private static final String VIEW_UI_PATH = "/view/ui";
+    private static final String ACCOUNTS_PATH = "/accounts";
+    private static final String AUTH_LOGIN_PATH = "/auth/login";
+    private static final String AUTH_ME_PATH = "/auth/me";
+    private static final String AUTH_LOGOUT_PATH = "/auth/logout";
+
+    private static final String VIEW_USERS_PATH = "/view/users";
+
+    private static final String ADVISOR_ME_PATH = "/advisor/me";
+    private static final String ADVISOR_CLIENTS_PATH = "/advisor/clients";
+    private static final String ADVISOR_ORDERS_PATH = "/advisor/orders";
+    private static final String ADVISOR_ORDERS_PLAN_PATH = "/advisor/orders/plan";
+    private static final String ADVISOR_DASHBOARD_PATH = "/advisor/dashboard";
 
     private final HttpServer httpServer;
     private final OrderRepository orderRepository;
     private final BulkOrderRepository bulkOrderRepository;
     private final BulkOrderMappingRepository bulkOrderMappingRepository;
     private final FundRepository fundRepository;
+    private final AccountRepository accountRepository;
+    private final AdvisorRepository advisorRepository;
+    private final AdvisorClientRelationshipRepository advisorClientRelationshipRepository;
+    private final UserRepository userRepository;
+    private final Map<String, UserSession> tokenStore = new ConcurrentHashMap<>();
     private final OrderStateMachine orderStateMachine;
     private final ProjectionStore projectionStore;
     private final OrderProjectionListener projectionListener;
@@ -70,7 +98,7 @@ public class OrderRestServer {
     private final List<OutputStream> sseClients;
 
     public OrderRestServer(int port, OrderRepository orderRepository) throws IOException {
-        this(port, orderRepository, null, null, null, null);
+        this(port, orderRepository, null, null, null, null, null, null, null, null, null, null);
     }
 
     public OrderRestServer(int port,
@@ -78,7 +106,7 @@ public class OrderRestServer {
                            BulkOrderRepository bulkOrderRepository,
                            BulkOrderMappingRepository bulkOrderMappingRepository,
                            OrderStateMachine orderStateMachine) throws IOException {
-        this(port, orderRepository, bulkOrderRepository, bulkOrderMappingRepository, null, orderStateMachine, null, null);
+        this(port, orderRepository, bulkOrderRepository, bulkOrderMappingRepository, null, orderStateMachine, null, null, null, null, null, null);
     }
 
     public OrderRestServer(int port,
@@ -87,7 +115,7 @@ public class OrderRestServer {
                            BulkOrderMappingRepository bulkOrderMappingRepository,
                            FundRepository fundRepository,
                            OrderStateMachine orderStateMachine) throws IOException {
-        this(port, orderRepository, bulkOrderRepository, bulkOrderMappingRepository, fundRepository, orderStateMachine, null, null);
+        this(port, orderRepository, bulkOrderRepository, bulkOrderMappingRepository, fundRepository, orderStateMachine, null, null, null, null, null, null);
     }
 
     public OrderRestServer(int port,
@@ -98,30 +126,82 @@ public class OrderRestServer {
                            OrderStateMachine orderStateMachine,
                            ProjectionStore projectionStore,
                            OrderProjectionListener projectionListener) throws IOException {
+        this(port, orderRepository, bulkOrderRepository, bulkOrderMappingRepository, fundRepository, orderStateMachine, projectionStore, projectionListener, null, null, null, null);
+    }
+
+    public OrderRestServer(int port,
+                           OrderRepository orderRepository,
+                           BulkOrderRepository bulkOrderRepository,
+                           BulkOrderMappingRepository bulkOrderMappingRepository,
+                           FundRepository fundRepository,
+                           OrderStateMachine orderStateMachine,
+                           ProjectionStore projectionStore,
+                           OrderProjectionListener projectionListener,
+                           AccountRepository accountRepository,
+                           AdvisorRepository advisorRepository,
+                           AdvisorClientRelationshipRepository advisorClientRelationshipRepository,
+                           UserRepository userRepository) throws IOException {
         this.orderRepository = Objects.requireNonNull(orderRepository, "orderRepository must not be null");
         this.bulkOrderRepository = bulkOrderRepository;
         this.bulkOrderMappingRepository = bulkOrderMappingRepository;
         this.fundRepository = fundRepository;
+        this.accountRepository = accountRepository;
+        this.advisorRepository = advisorRepository;
+        this.advisorClientRelationshipRepository = advisorClientRelationshipRepository;
+        this.userRepository = userRepository;
         this.orderStateMachine = orderStateMachine;
         this.projectionStore = projectionStore;
         this.projectionListener = projectionListener;
         this.objectMapper = new ObjectMapper();
         this.sseClients = new CopyOnWriteArrayList<>();
         this.httpServer = HttpServer.create(new InetSocketAddress(port), 0);
-        this.httpServer.createContext(PLAN_ORDERS_PATH, new PlanOrdersHandler());
-        this.httpServer.createContext(LIST_ORDERS_PATH, new ListOrdersHandler());
-        this.httpServer.createContext(ORDER_STATUS_PATH, new OrderStatusHandler());
-        this.httpServer.createContext(CONFIRM_ORDERS_PATH, new ConfirmOrdersHandler());
-        this.httpServer.createContext(BOOK_ORDERS_PATH, new BookOrdersHandler());
-        this.httpServer.createContext(VIEW_ORDERS_PATH, new ViewOrdersHandler());
-        this.httpServer.createContext(VIEW_BULK_ORDERS_PATH, new ViewBulkOrdersHandler());
-        this.httpServer.createContext(VIEW_DASHBOARD_PATH, new ViewDashboardHandler());
-        this.httpServer.createContext(VIEW_AGGREGATES_ACCOUNTS_PATH, new ViewAggregateAccountsHandler());
-        this.httpServer.createContext(VIEW_AGGREGATES_FUNDS_PATH, new ViewAggregateFundsHandler());
-        this.httpServer.createContext(VIEW_REPLAY_PATH, new ViewReplayHandler());
-        this.httpServer.createContext(VIEW_STREAM_PATH, new ViewStreamHandler());
-        this.httpServer.createContext(VIEW_UI_PATH, new ViewUiHandler());
-        this.httpServer.setExecutor(Executors.newFixedThreadPool(12));
+        this.httpServer.createContext(ADVISOR_ORDERS_PLAN_PATH, withCors(new AdvisorPlanOrdersHandler()));
+        this.httpServer.createContext(ADVISOR_ORDERS_PATH, withCors(new AdvisorOrdersHandler()));
+        this.httpServer.createContext(ADVISOR_DASHBOARD_PATH, withCors(new AdvisorDashboardHandler()));
+        this.httpServer.createContext(ADVISOR_CLIENTS_PATH, withCors(new AdvisorClientsHandler()));
+        this.httpServer.createContext(ADVISOR_ME_PATH, withCors(new AdvisorMeHandler()));
+        this.httpServer.createContext(PLAN_ORDERS_PATH, withCors(new PlanOrdersHandler()));
+        this.httpServer.createContext(LIST_ORDERS_PATH, withCors(new ListOrdersHandler()));
+        this.httpServer.createContext(ORDER_STATUS_PATH, withCors(new OrderStatusHandler()));
+        this.httpServer.createContext(CONFIRM_ORDERS_PATH, withCors(new ConfirmOrdersHandler()));
+        this.httpServer.createContext(BOOK_ORDERS_PATH, withCors(new BookOrdersHandler()));
+        this.httpServer.createContext(VIEW_ORDERS_PATH, withCors(new ViewOrdersHandler()));
+        this.httpServer.createContext(VIEW_BULK_ORDERS_PATH, withCors(new ViewBulkOrdersHandler()));
+        this.httpServer.createContext(VIEW_DASHBOARD_PATH, withCors(new ViewDashboardHandler()));
+        this.httpServer.createContext(VIEW_AGGREGATES_ACCOUNTS_PATH, withCors(new ViewAggregateAccountsHandler()));
+        this.httpServer.createContext(VIEW_AGGREGATES_FUNDS_PATH, withCors(new ViewAggregateFundsHandler()));
+        this.httpServer.createContext(VIEW_REPLAY_PATH, withCors(new ViewReplayHandler()));
+        this.httpServer.createContext(VIEW_STREAM_PATH, withCors(new ViewStreamHandler()));
+        this.httpServer.createContext(VIEW_UI_PATH, withCors(new ViewUiHandler()));
+        this.httpServer.createContext(ACCOUNTS_PATH, withCors(new ListAccountsHandler()));
+        this.httpServer.createContext(AUTH_LOGIN_PATH, withCors(new AuthLoginHandler()));
+        this.httpServer.createContext(AUTH_ME_PATH, withCors(new AuthMeHandler()));
+        this.httpServer.createContext(AUTH_LOGOUT_PATH, withCors(new AuthLogoutHandler()));
+        this.httpServer.createContext(VIEW_USERS_PATH, withCors(new ViewUsersHandler()));
+        this.httpServer.setExecutor(Executors.newFixedThreadPool(16));
+    }
+
+    private static final String CORS_ORIGIN_ENV_VAR = "OMS_CORS_ORIGIN";
+
+    private String getAllowedOrigin() {
+        String origin = System.getenv(CORS_ORIGIN_ENV_VAR);
+        return (origin == null || origin.isBlank()) ? "*" : origin;
+    }
+
+    private HttpHandler withCors(HttpHandler handler) {
+        return exchange -> {
+            exchange.getResponseHeaders().add("Access-Control-Allow-Origin", getAllowedOrigin());
+            exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+            exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+
+            if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(204, -1);
+                exchange.close();
+                return;
+            }
+
+            handler.handle(exchange);
+        };
     }
 
     public void start() {
@@ -817,6 +897,386 @@ public class OrderRestServer {
             exchange.sendResponseHeaders(200, bytes.length);
             exchange.getResponseBody().write(bytes);
             exchange.close();
+        }
+    }
+
+    private UserSession resolveAuthenticatedUser(HttpExchange exchange) {
+        String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) return null;
+        String token = authHeader.substring(7).trim();
+        UserSession session = tokenStore.get(token);
+        if (session == null) return null;
+        if (session.isExpired()) { tokenStore.remove(token); return null; }
+        return session;
+    }
+
+    private String resolveAdvisorId(HttpExchange exchange) {
+        // Token-first: resolve from authenticated session
+        UserSession session = resolveAuthenticatedUser(exchange);
+        if (session != null && "ADVISOR".equals(session.getUser().getRole())) {
+            return session.getUser().getAdvisorID();
+        }
+        // Legacy fallback for X-Advisor-ID header or query param
+        String fromHeader = exchange.getRequestHeaders().getFirst("X-Advisor-ID");
+        if (fromHeader != null && !fromHeader.isBlank()) return fromHeader.trim();
+        return getQueryParam(exchange.getRequestURI().getQuery(), "advisorID");
+    }
+
+    private Map<String, Object> userToResponse(User user) {
+        Map<String, Object> resp = new HashMap<>();
+        resp.put("userID",       user.getUserID());
+        resp.put("username",     user.getUsername());
+        resp.put("displayName",  user.getDisplayName());
+        resp.put("role",         user.getRole());
+        resp.put("accountID",    user.getAccountID());
+        resp.put("advisorID",    user.getAdvisorID());
+        return resp;
+    }
+
+    private final class AdvisorMeHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only GET is supported"));
+                return;
+            }
+            String advisorId = resolveAdvisorId(exchange);
+            if (advisorId == null || advisorId.isBlank()) {
+                sendJsonResponse(exchange, 400, Map.of("message", "X-Advisor-ID header or advisorID query param required"));
+                return;
+            }
+            if (advisorRepository == null) {
+                sendJsonResponse(exchange, 500, Map.of("message", "Advisor repository not configured"));
+                return;
+            }
+            Optional<com.iiit.oms.model.Advisor> advisor = advisorRepository.findByAdvisorId(advisorId);
+            if (advisor.isEmpty()) {
+                sendJsonResponse(exchange, 404, Map.of("message", "Advisor not found: " + advisorId));
+                return;
+            }
+            List<String> clients = advisorClientRelationshipRepository != null
+                    ? advisorClientRelationshipRepository.findClientAccountIds(advisorId)
+                    : List.of();
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("advisorID", advisor.get().getAdvisorID());
+            resp.put("name", advisor.get().getName());
+            resp.put("email", advisor.get().getEmail());
+            resp.put("clientCount", clients.size());
+            sendJsonResponse(exchange, 200, resp);
+        }
+    }
+
+    private final class AdvisorClientsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only GET is supported"));
+                return;
+            }
+            String advisorId = resolveAdvisorId(exchange);
+            if (advisorId == null || advisorId.isBlank()) {
+                sendJsonResponse(exchange, 400, Map.of("message", "X-Advisor-ID header or advisorID query param required"));
+                return;
+            }
+            if (advisorRepository == null || advisorClientRelationshipRepository == null) {
+                sendJsonResponse(exchange, 500, Map.of("message", "Advisor repositories not configured"));
+                return;
+            }
+            if (advisorRepository.findByAdvisorId(advisorId).isEmpty()) {
+                sendJsonResponse(exchange, 404, Map.of("message", "Advisor not found: " + advisorId));
+                return;
+            }
+            List<String> clientIds = advisorClientRelationshipRepository.findClientAccountIds(advisorId);
+            List<Map<String, Object>> response = new ArrayList<>();
+            for (String accountID : clientIds) {
+                Map<String, Object> row = new HashMap<>();
+                row.put("accountID", accountID);
+                if (projectionStore != null) {
+                    List<OrderView> orders = projectionStore.findOrdersByAccount(accountID);
+                    BigDecimal totalAmount = orders.stream().map(OrderView::getAmount).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    BigDecimal totalQuantity = orders.stream().map(OrderView::getQuantity).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+                    Map<String, Long> statuses = orders.stream().collect(Collectors.groupingBy(OrderView::getOrderStatus, Collectors.counting()));
+                    row.put("orderCount", orders.size());
+                    row.put("totalAmount", totalAmount);
+                    row.put("totalQuantity", totalQuantity);
+                    row.put("statuses", statuses);
+                } else {
+                    row.put("orderCount", 0);
+                    row.put("totalAmount", BigDecimal.ZERO);
+                    row.put("totalQuantity", BigDecimal.ZERO);
+                    row.put("statuses", Map.of());
+                }
+                response.add(row);
+            }
+            sendJsonResponse(exchange, 200, response);
+        }
+    }
+
+    private final class AdvisorOrdersHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only GET is supported"));
+                return;
+            }
+            String advisorId = resolveAdvisorId(exchange);
+            if (advisorId == null || advisorId.isBlank()) {
+                sendJsonResponse(exchange, 400, Map.of("message", "X-Advisor-ID header required"));
+                return;
+            }
+            if (advisorRepository == null || advisorClientRelationshipRepository == null || projectionStore == null) {
+                sendJsonResponse(exchange, 500, Map.of("message", "Advisor or projection repositories not configured"));
+                return;
+            }
+            if (advisorRepository.findByAdvisorId(advisorId).isEmpty()) {
+                sendJsonResponse(exchange, 404, Map.of("message", "Advisor not found"));
+                return;
+            }
+            List<String> clientIds = advisorClientRelationshipRepository.findClientAccountIds(advisorId);
+            String filterAccount = getQueryParam(exchange.getRequestURI().getQuery(), "accountID");
+            String filterFund = getQueryParam(exchange.getRequestURI().getQuery(), "fundID");
+            String filterStatus = getQueryParam(exchange.getRequestURI().getQuery(), "status");
+
+            List<OrderView> orders = clientIds.stream()
+                    .filter(id -> filterAccount == null || filterAccount.isBlank() || filterAccount.equals(id))
+                    .flatMap(id -> projectionStore.findOrdersByAccount(id).stream())
+                    .filter(o -> filterFund == null || filterFund.isBlank() || filterFund.equals(o.getFundID()))
+                    .filter(o -> filterStatus == null || filterStatus.isBlank() || filterStatus.equalsIgnoreCase(o.getOrderStatus()))
+                    .sorted(Comparator.comparing(OrderView::getOrderID))
+                    .collect(Collectors.toList());
+
+            sendJsonResponse(exchange, 200, orders);
+        }
+    }
+
+    private final class AdvisorPlanOrdersHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only POST is supported"));
+                return;
+            }
+            String advisorId = resolveAdvisorId(exchange);
+            if (advisorId == null || advisorId.isBlank()) {
+                sendJsonResponse(exchange, 400, Map.of("message", "X-Advisor-ID header required"));
+                return;
+            }
+            if (advisorRepository == null || advisorClientRelationshipRepository == null) {
+                sendJsonResponse(exchange, 500, Map.of("message", "Advisor repositories not configured"));
+                return;
+            }
+            if (advisorRepository.findByAdvisorId(advisorId).isEmpty()) {
+                sendJsonResponse(exchange, 404, Map.of("message", "Advisor not found: " + advisorId));
+                return;
+            }
+            try {
+                List<Order> orders = objectMapper.readValue(exchange.getRequestBody(), new com.fasterxml.jackson.core.type.TypeReference<List<Order>>() {});
+                List<String> assignedIds = new ArrayList<>();
+                for (Order order : orders) {
+                    if (!advisorClientRelationshipRepository.isClientOfAdvisor(advisorId, order.getAccountID())) {
+                        sendJsonResponse(exchange, 403, Map.of("message", "Account " + order.getAccountID() + " is not a client of advisor " + advisorId));
+                        return;
+                    }
+                    if (order.getOrderID() == null || order.getOrderID().isBlank()) {
+                        order.setOrderID(UniqueIdGenerator.generate("ORD"));
+                    }
+                    if (order.getOrderSide() == null) order.setOrderSide(OrderSide.BUY);
+                    if (order.getOrderStatus() == null) order.setOrderStatus(OrderStatus.PLANNED);
+                    orderRepository.save(order);
+                    assignedIds.add(order.getOrderID());
+                    Optional<Fund> maybeFund = resolveFund(order.getProductID());
+                    if (projectionListener != null && maybeFund.isPresent()) {
+                        projectionListener.onOrderPlanned(order, maybeFund.get());
+                        publishViewEvent("order-updated", toOrderEventPayload(order, null));
+                    }
+                }
+                Map<String, Object> resp = Map.of("message", "Orders planned", "count", orders.size(), "orderIDs", assignedIds);
+                sendJsonResponse(exchange, 201, resp);
+            } catch (Exception ex) {
+                LOGGER.severe("Advisor plan orders failed: " + ex.getMessage());
+                sendJsonResponse(exchange, 400, Map.of("message", "Invalid request: " + ex.getMessage()));
+            }
+        }
+    }
+
+    private final class AdvisorDashboardHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only GET is supported"));
+                return;
+            }
+            String advisorId = resolveAdvisorId(exchange);
+            if (advisorId == null || advisorId.isBlank()) {
+                sendJsonResponse(exchange, 400, Map.of("message", "X-Advisor-ID header required"));
+                return;
+            }
+            if (advisorRepository == null || advisorClientRelationshipRepository == null) {
+                sendJsonResponse(exchange, 500, Map.of("message", "Advisor repositories not configured"));
+                return;
+            }
+            if (advisorRepository.findByAdvisorId(advisorId).isEmpty()) {
+                sendJsonResponse(exchange, 404, Map.of("message", "Advisor not found"));
+                return;
+            }
+            List<String> clientIds = advisorClientRelationshipRepository.findClientAccountIds(advisorId);
+            List<OrderView> allOrders = new ArrayList<>();
+            if (projectionStore != null) {
+                for (String id : clientIds) allOrders.addAll(projectionStore.findOrdersByAccount(id));
+            }
+            long activeOrders = allOrders.stream()
+                    .filter(o -> List.of("PLANNED","VALIDATED","ENRICHED","PLACED","BULKED","CONFIRMED","CONTRACTED").contains(o.getOrderStatus()))
+                    .count();
+            long failedOrders = allOrders.stream().filter(o -> "ERRORED".equals(o.getOrderStatus())).count();
+            BigDecimal totalAmount = allOrders.stream().map(OrderView::getAmount).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+            Map<String, Object> dashboard = new HashMap<>();
+            dashboard.put("advisorID", advisorId);
+            dashboard.put("clientCount", clientIds.size());
+            dashboard.put("totalAmount", totalAmount);
+            dashboard.put("activeOrders", activeOrders);
+            dashboard.put("failedOrders", failedOrders);
+            dashboard.put("totalOrders", allOrders.size());
+            sendJsonResponse(exchange, 200, dashboard);
+        }
+    }
+
+    private final class ListAccountsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only GET is supported"));
+                return;
+            }
+            if (accountRepository == null) {
+                sendJsonResponse(exchange, 500, Map.of("message", "Account repository not configured"));
+                return;
+            }
+            List<Map<String, String>> response = accountRepository.findAll().stream()
+                    .map(a -> {
+                        Map<String, String> row = new HashMap<>();
+                        row.put("accountID", a.getAccountID());
+                        row.put("accountName", a.getAccountName());
+                        return row;
+                    })
+                    .sorted(Comparator.comparing(m -> m.get("accountID")))
+                    .collect(Collectors.toList());
+            sendJsonResponse(exchange, 200, response);
+        }
+    }
+
+    private final class AuthLoginHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only POST is supported"));
+                return;
+            }
+            if (userRepository == null) {
+                sendJsonResponse(exchange, 500, Map.of("message", "User repository not configured"));
+                return;
+            }
+            try {
+                Map<String, String> body = objectMapper.readValue(
+                        exchange.getRequestBody(), new TypeReference<Map<String, String>>() {});
+                String username = body.get("username");
+                String password = body.get("password");
+                if (username == null || username.isBlank() || password == null || password.isBlank()) {
+                    sendJsonResponse(exchange, 400, Map.of("message", "username and password are required"));
+                    return;
+                }
+                Optional<User> maybeUser = userRepository.findByUsername(username.trim());
+                if (maybeUser.isEmpty() || !password.equals(maybeUser.get().getPassword())) {
+                    sendJsonResponse(exchange, 401, Map.of("message", "Invalid username or password"));
+                    return;
+                }
+                String token = java.util.UUID.randomUUID().toString();
+                UserSession session = new UserSession(token, maybeUser.get());
+                tokenStore.put(token, session);
+                Map<String, Object> response = userToResponse(maybeUser.get());
+                response.put("token", token);
+                sendJsonResponse(exchange, 200, response);
+            } catch (Exception ex) {
+                sendJsonResponse(exchange, 400, Map.of("message", "Invalid request body"));
+            }
+        }
+    }
+
+    private final class AuthMeHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only GET is supported"));
+                return;
+            }
+            UserSession session = resolveAuthenticatedUser(exchange);
+            if (session == null) {
+                sendJsonResponse(exchange, 401, Map.of("message", "Not authenticated"));
+                return;
+            }
+            sendJsonResponse(exchange, 200, userToResponse(session.getUser()));
+        }
+    }
+
+    private final class ViewUsersHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only GET is supported"));
+                return;
+            }
+            if (userRepository == null) {
+                sendJsonResponse(exchange, 500, Map.of("message", "User repository is not configured"));
+                return;
+            }
+
+            List<User> users = userRepository.findAll();
+            List<Advisor> advisors = advisorRepository != null ? advisorRepository.findAll() : List.of();
+            Map<String, Advisor> advisorMap = advisors.stream()
+                    .collect(Collectors.toMap(Advisor::getAdvisorID, a -> a));
+
+            // Build advisor -> client accounts mapping
+            Map<String, List<String>> advisorClients = new HashMap<>();
+            if (advisorClientRelationshipRepository != null) {
+                advisorClientRelationshipRepository.findAll().forEach(rel ->
+                    advisorClients.computeIfAbsent(rel.getAdvisorID(), k -> new ArrayList<>()).add(rel.getAccountID())
+                );
+            }
+
+            List<Map<String, Object>> userList = users.stream().map(u -> {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("userID", u.getUserID());
+                row.put("username", u.getUsername());
+                row.put("role", u.getRole());
+                row.put("displayName", u.getDisplayName());
+                row.put("accountID", u.getAccountID());
+                row.put("advisorID", u.getAdvisorID());
+                if ("ADVISOR".equals(u.getRole()) && u.getAdvisorID() != null) {
+                    Advisor adv = advisorMap.get(u.getAdvisorID());
+                    if (adv != null) {
+                        row.put("advisorEmail", adv.getEmail());
+                    }
+                    row.put("clientAccounts", advisorClients.getOrDefault(u.getAdvisorID(), List.of()));
+                }
+                return row;
+            }).sorted(Comparator.comparing(m -> (String) m.get("userID")))
+              .collect(Collectors.toList());
+
+            sendJsonResponse(exchange, 200, userList);
+        }
+    }
+
+    private final class AuthLogoutHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only POST is supported"));
+                return;
+            }
+            String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
+            if (authHeader != null && authHeader.startsWith("Bearer ")) {
+                tokenStore.remove(authHeader.substring(7).trim());
+            }
+            sendJsonResponse(exchange, 200, Map.of("message", "Logged out"));
         }
     }
 

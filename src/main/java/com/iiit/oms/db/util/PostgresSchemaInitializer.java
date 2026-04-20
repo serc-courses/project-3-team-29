@@ -81,11 +81,26 @@ public final class PostgresSchemaInitializer {
                 + "PRIMARY KEY (bulk_order_id, individual_order_id)"
                 + ")");
 
+        statements.add("CREATE TABLE IF NOT EXISTS advisors ("
+                + "advisor_id VARCHAR(64) PRIMARY KEY,"
+                + "name VARCHAR(255) NOT NULL,"
+                + "email VARCHAR(255)"
+                + ")");
+
+        statements.add("CREATE TABLE IF NOT EXISTS advisor_client_relationships ("
+                + "advisor_id VARCHAR(64) NOT NULL,"
+                + "account_id VARCHAR(64) NOT NULL,"
+                + "relationship_status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE',"
+                + "PRIMARY KEY (advisor_id, account_id)"
+                + ")");
+
         return statements;
     }
 
     private static List<String> cleanDataStatements() {
         List<String> statements = new ArrayList<>();
+        statements.add("TRUNCATE TABLE advisor_client_relationships");
+        statements.add("TRUNCATE TABLE advisors");
         statements.add("TRUNCATE TABLE bulk_order_mappings");
         statements.add("TRUNCATE TABLE bulk_orders");
         statements.add("TRUNCATE TABLE orders");

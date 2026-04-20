@@ -1,0 +1,119 @@
+.orders-page {
+  position: relative;
+}
+
+.filter-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  margin-bottom: var(--sp-3);
+}
+
+.filter-chips::-webkit-scrollbar { display: none; }
+
+.filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-500);
+  cursor: pointer;
+  transition: all var(--duration-fast);
+  -webkit-user-select: none;
+  min-height: 36px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.filter-chip.active {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary);
+}
+
+.orders-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--sp-4);
+}
+
+.orders-search-icon {
+  position: absolute;
+  left: var(--sp-3);
+  color: var(--color-text-400);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.orders-search-input {
+  width: 100%;
+  padding: var(--sp-3) var(--sp-4) var(--sp-3) 40px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  color: var(--color-text-900);
+  background: var(--color-surface);
+  min-height: 44px;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.orders-search-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-100);
+}
+
+.orders-search-clear {
+  position: absolute;
+  right: var(--sp-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-400);
+  display: flex;
+  align-items: center;
+  padding: var(--sp-1);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-bottom: 80px;
+}
+
+.orders-fab {
+  position: fixed;
+  bottom: calc(var(--bottom-nav-height) + var(--safe-area-bottom) + 16px);
+  right: 16px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-lg);
+  transition: transform var(--duration-fast) var(--ease-out);
+  z-index: 80;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.orders-fab:active {
+  transform: scale(0.93);
+}

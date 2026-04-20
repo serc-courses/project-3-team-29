@@ -1,0 +1,13 @@
+.status-chart {
+  width: 100%;
+}
+
+.status-chart-title {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  font-feature-settings: "ss01";
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-gray-500);
+  margin-bottom: var(--spacing-4);
+}

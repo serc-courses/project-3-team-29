@@ -1,0 +1,30 @@
+.advisor-review-page { min-height: 100dvh; background: var(--color-bg); padding-bottom: 100px; }
+.advisor-review-content { padding: var(--sp-4); display: flex; flex-direction: column; gap: var(--sp-4); }
+
+@media (min-width: 768px) {
+  .advisor-review-content {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    column-gap: var(--sp-5);
+    align-items: start;
+    padding: var(--sp-5);
+  }
+
+  /* Client group sections auto-flow into left column */
+  .advisor-review-content > .section {
+    grid-column: 1;
+  }
+
+  /* Summary card: right column, sticky as groups scroll */
+  .advisor-review-summary {
+    grid-column: 2;
+    grid-row: 1;
+    position: sticky;
+    top: 72px;
+    align-self: start;
+  }
+}
+.advisor-review-summary { text-align: center; padding: var(--sp-5); }
+.advisor-review-summary-row { display: flex; align-items: center; justify-content: center; gap: var(--sp-3); font-size: var(--text-sm); color: var(--color-text-500); margin-bottom: var(--sp-2); }
+.advisor-review-total { font-size: var(--text-3xl); font-weight: 700; color: var(--color-text-900); letter-spacing: -.02em; margin-bottom: 4px; }
+.advisor-review-order-row { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-3) var(--sp-4); }

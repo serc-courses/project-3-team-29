@@ -1,0 +1,49 @@
+.accounts-page {}
+
+.accounts-search {
+  margin-bottom: var(--spacing-4);
+  max-width: 360px;
+}
+
+.accounts-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 280px;
+  gap: var(--spacing-3);
+  color: var(--color-gray-400);
+  font-size: 0.875rem;
+  font-feature-settings: "ss01";
+}
+
+.accounts-error {
+  padding: var(--spacing-4);
+  background: rgba(234,34,97,0.06);
+  border: 1px solid rgba(234,34,97,0.25);
+  border-radius: var(--radius-sm);
+  color: var(--color-error);
+  font-size: 0.875rem;
+  font-feature-settings: "ss01";
+}
+
+/* Status breakdown badges */
+.status-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.status-mini-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-micro);
+  font-weight: 300;
+  font-feature-settings: "ss01";
+  border: 1px solid;
+  white-space: nowrap;
+}

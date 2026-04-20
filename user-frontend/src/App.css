@@ -1,0 +1,115 @@
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+  background: var(--color-bg);
+  padding-top: env(safe-area-inset-top);
+}
+
+.app-main {
+  flex: 1;
+  padding-bottom: 72px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-text-300) transparent;
+}
+
+.app-main::-webkit-scrollbar {
+  width: 4px;
+}
+
+.app-main::-webkit-scrollbar-thumb {
+  background: var(--color-text-300);
+  border-radius: var(--radius-full);
+}
+
+/* ─── Advisor desktop shell ──────────────────────────────────── */
+
+@media (min-width: 768px) {
+  .app-shell--advisor {
+    max-width: none;
+    margin: 0;
+    flex-direction: row;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  /* app-main scrolls independently; sidebar is a flex sibling */
+  .app-shell--advisor .app-main {
+    height: 100dvh;
+    overflow-y: auto;
+    padding-bottom: var(--sp-8);
+  }
+
+  /* Remove bottom-nav clearance from .page inside advisor shell */
+  .app-shell--advisor .page {
+    padding-bottom: var(--sp-6);
+  }
+
+  /* Hide bottom nav — sidebar replaces it on desktop */
+  .app-shell--advisor .bottom-nav {
+    display: none;
+  }
+
+  /* Content fills available width on tablet */
+  .app-shell--advisor .app-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .app-shell--advisor .page {
+    max-width: none;
+    width: 100%;
+    padding-left: var(--sp-5);
+    padding-right: var(--sp-5);
+  }
+
+  /* Advisor basket/review CTA: clear the collapsed sidebar */
+  .app-shell--advisor .place-order-cta {
+    max-width: none;
+    left: 64px;
+    right: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-shell--advisor .place-order-cta {
+    left: 240px;
+  }
+
+  .app-shell--advisor .page {
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+    padding-left: var(--sp-6);
+    padding-right: var(--sp-6);
+  }
+}
+
+/* ─── Connection dot ─────────────────────────────────────────── */
+
+.connection-indicator {
+  position: fixed;
+  top: 8px;
+  right: 8px;
+  z-index: 50;
+}
+
+.connection-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-error);
+  transition: background var(--duration-normal);
+}
+
+.connection-dot.connected {
+  background: var(--color-success);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
