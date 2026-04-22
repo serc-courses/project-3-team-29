@@ -4,6 +4,7 @@ export const ORDER_STATUS = {
   ENRICHED: 'ENRICHED',
   PLACED: 'PLACED',
   BULKED: 'BULKED',
+  TRANSMITTED: 'TRANSMITTED',
   CONFIRMED: 'CONFIRMED',
   CONTRACTED: 'CONTRACTED',
   BOOKED: 'BOOKED',
@@ -17,19 +18,21 @@ export const ORDER_SIDE = {
 
 export const STATUS_GROUP = {
   PROCESSING: ['PLANNED', 'VALIDATED', 'ENRICHED', 'PLACED'],
-  PENDING: ['BULKED', 'CONFIRMED', 'CONTRACTED'],
+  PENDING: ['BULKED', 'TRANSMITTED', 'CONFIRMED', 'CONTRACTED'],
   COMPLETED: ['BOOKED'],
   FAILED: ['ERRORED'],
 }
 
 export const STATUS_LABEL = {
-  PLANNED: 'Processing',
-  VALIDATED: 'Processing',
-  ENRICHED: 'Processing',
-  PLACED: 'Processing',
-  BULKED: 'Pending',
-  CONFIRMED: 'Pending',
-  CONTRACTED: 'Pending',
+  PLANNED: 'Planned',
+  VALIDATED: 'Validated',
+  ENRICHED: 'Enriched',
+  PLACED: 'Placed',
+  BULKED: 'Grouped',
+  TRANSMITTED: 'Transmitted',
+  CONFIRMED: 'Confirmed',
+  CONTRACTED: 'Contracted',
   BOOKED: 'Completed',
   ERRORED: 'Failed',
 }
+

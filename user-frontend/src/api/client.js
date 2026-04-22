@@ -6,13 +6,14 @@ function getToken() {
 
 async function request(url, options = {}) {
   const token = getToken()
+  const { headers: extraHeaders, ...restOptions } = options
   const config = {
+    ...restOptions,
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-      ...options.headers,
+      ...extraHeaders,
     },
-    ...options,
   }
 
   const response = await fetch(`${BASE_URL}${url}`, config)
@@ -25,7 +26,12 @@ async function request(url, options = {}) {
 
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(text || `Request failed: ${response.status}`)
+    let message = text || `Request failed: ${response.status}`
+    try {
+      const json = JSON.parse(text)
+      if (json.message) message = json.message
+    } catch (_) {}
+    throw new Error(message)
   }
 
   const contentType = response.headers.get('Content-Type') || ''
@@ -34,6 +40,7 @@ async function request(url, options = {}) {
 }
 
 export const api = {
-  get:  (url)       => request(url),
-  post: (url, body) => request(url, { method: 'POST', body: JSON.stringify(body) }),
+  get:  (url) => request(url),
+  post: (url, body, extraHeaders = {}) => request(url, { method: 'POST', body: JSON.stringify(body), headers: extraHeaders }),
 }
+

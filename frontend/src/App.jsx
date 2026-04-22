@@ -32,8 +32,8 @@ function App() {
       <Layout sseConnected={sseConnected}>
         <Routes>
           <Route path="/" element={<Dashboard sseEventCount={sseEventCount} />} />
-          <Route path="/orders" element={<Orders />} />
-          <Route path="/bulk-orders" element={<BulkOrders />} />
+          <Route path="/orders" element={<Orders sseEventCount={sseEventCount} />} />
+          <Route path="/bulk-orders" element={<BulkOrders sseEventCount={sseEventCount} />} />
           <Route path="/funds" element={<Funds />} />
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/users" element={<Users />} />

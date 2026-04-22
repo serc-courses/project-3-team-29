@@ -1,7 +1,9 @@
 package com.iiit.oms.processor;
 
+import com.iiit.oms.model.AuditLogEntry;
 import com.iiit.oms.model.Order;
 import com.iiit.oms.model.OrderStatus;
+import com.iiit.oms.repository.AuditLogRepository;
 
 import java.util.Objects;
 import java.util.logging.Logger;
@@ -9,9 +11,14 @@ import java.util.logging.Logger;
 public class OrderStateMachine {
     private static final Logger LOGGER = Logger.getLogger(OrderStateMachine.class.getName());
     private final OrderManager orderManager;
+    private AuditLogRepository auditLogRepository;
 
     public OrderStateMachine(OrderManager orderManager) {
         this.orderManager = Objects.requireNonNull(orderManager, "orderManager must not be null");
+    }
+
+    public void setAuditLogRepository(AuditLogRepository auditLogRepository) {
+        this.auditLogRepository = auditLogRepository;
     }
 
     public Order process(Order order) {
@@ -51,8 +58,36 @@ public class OrderStateMachine {
         return order;
     }
 
+    /**
+     * Advance order from CONFIRMED → CONTRACTED (once contract callback received with NAV/shares).
+     * Called by the ContractCallbackHandler in the REST server.
+     */
+    public void advanceToContracted(Order order, String contractRef, java.math.BigDecimal nav, java.math.BigDecimal allocatedShares) {
+        if (order.getOrderStatus() != OrderStatus.TRANSMITTED) {
+            throw new IllegalStateException("Cannot contract order " + order.getOrderID()
+                    + " — expected TRANSMITTED but was " + order.getOrderStatus());
+        }
+        OrderStatus from = order.getOrderStatus();
+        order.setOrderStatus(OrderStatus.CONTRACTED);
+        order.setContractRef(contractRef);
+        order.setNav(nav);
+        order.setAllocatedShares(allocatedShares);
+        writeAuditLog(order.getOrderID(), from, OrderStatus.CONTRACTED, "ContractCallbackHandler",
+                "contractRef=" + contractRef + ", nav=" + nav + ", allocatedShares=" + allocatedShares);
+    }
+
+    /**
+     * Advance order from CONTRACTED → BOOKED.
+     */
+    public void advanceToBooked(Order order) {
+        OrderStatus from = order.getOrderStatus();
+        order.setOrderStatus(OrderStatus.BOOKED);
+        writeAuditLog(order.getOrderID(), from, OrderStatus.BOOKED, "ContractCallbackHandler", null);
+    }
+
     private void advance(Order order) {
         OrderStatus status = order.getOrderStatus();
+        OrderStatus nextStatus = null;
         LOGGER.fine("Advancing order " + order.getOrderID() + " from status: " + status);
 
         try {
@@ -60,46 +95,53 @@ public class OrderStateMachine {
                 case PLANNED:
                     LOGGER.info("Executing PLANNED->VALIDATED transition for order: " + order.getOrderID());
                     orderManager.validate(order);
-                    order.setOrderStatus(OrderStatus.VALIDATED);
+                    nextStatus = OrderStatus.VALIDATED;
                     break;
                 case VALIDATED:
                     LOGGER.info("Executing VALIDATED->ENRICHED transition for order: " + order.getOrderID());
                     orderManager.enrich(order);
-                    order.setOrderStatus(OrderStatus.ENRICHED);
+                    nextStatus = OrderStatus.ENRICHED;
                     break;
                 case ENRICHED:
                     LOGGER.info("Executing ENRICHED->PLACED transition for order: " + order.getOrderID());
                     orderManager.place(order);
-                    order.setOrderStatus(OrderStatus.PLACED);
+                    nextStatus = OrderStatus.PLACED;
                     break;
                 case PLACED:
                     LOGGER.info("Order " + order.getOrderID() + " is PLACED and awaiting batchout to become BULKED");
-                    break;
-                case BULKED:
-                    LOGGER.info("Executing BULKED->CONFIRMED transition for order: " + order.getOrderID());
-                    orderManager.confirm(order);
-                    order.setOrderStatus(OrderStatus.CONFIRMED);
-                    break;
-                case CONFIRMED:
-                    LOGGER.info("Executing CONFIRMED->BOOKED transition for order: " + order.getOrderID());
-                    orderManager.contract(order);
-                    order.setOrderStatus(OrderStatus.BOOKED);
-                    break;
+                    return; // stop loop; BatchoutScheduler handles PLACED→BULKED→TRANSMITTED
                 case ERRORED:
-                    break;
+                    return;
                 default:
-                    throw new IllegalStateException("Unsupported order status: " + status);
+                    throw new IllegalStateException("Unsupported order status for auto-processing: " + status);
             }
+            order.setOrderStatus(nextStatus);
+            writeAuditLog(order.getOrderID(), status, nextStatus, "OrderStateMachine", null);
         } catch (RuntimeException ex) {
             LOGGER.severe("Error during " + status + " transition for order " + order.getOrderID() + ": " + ex.getMessage());
             order.setOrderStatus(OrderStatus.ERRORED);
             order.setErrorDescription(ex.getMessage());
+            writeAuditLog(order.getOrderID(), status, OrderStatus.ERRORED, "OrderStateMachine", ex.getMessage());
             throw ex;
         }
     }
 
     private boolean isOmsInternal(OrderStatus status) {
-        return status == OrderStatus.PLANNED || status == OrderStatus.ENRICHED || 
-            status == OrderStatus.VALIDATED || status == OrderStatus.BULKED;
+        // BULKED is intentionally NOT included here.
+        // BatchoutScheduler is responsible for the PLACED→BULKED→TRANSMITTED transitions.
+        return status == OrderStatus.PLANNED
+                || status == OrderStatus.VALIDATED
+                || status == OrderStatus.ENRICHED;
+    }
+
+    private void writeAuditLog(String orderID, OrderStatus from, OrderStatus to, String actor, String details) {
+        if (auditLogRepository == null) return;
+        try {
+            String fromStr = from != null ? from.name() : null;
+            auditLogRepository.log(new AuditLogEntry(orderID, fromStr, to.name(), actor, details));
+        } catch (Exception ex) {
+            LOGGER.warning("Failed to write audit log for order " + orderID + ": " + ex.getMessage());
+        }
     }
 }
+

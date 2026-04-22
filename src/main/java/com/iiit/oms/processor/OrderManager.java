@@ -1,16 +1,21 @@
 package com.iiit.oms.processor;
 
+import com.iiit.oms.model.Fund;
 import com.iiit.oms.model.Order;
 import com.iiit.oms.model.OrderSide;
 import com.iiit.oms.repository.AccountRepository;
 import com.iiit.oms.repository.FundRepository;
 import com.iiit.oms.util.UniqueIdGenerator;
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.logging.Logger;
 
 public class OrderManager {
     private static final Logger logger = Logger.getLogger(OrderManager.class.getName());
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd");
     private final AccountRepository accountRepository;
     private final FundRepository fundRepository;
 
@@ -22,26 +27,18 @@ public class OrderManager {
     public void validate(Order order) {
         logger.info("Validating order: " + order.getOrderID());
         
-        // Validation 1: productID should exist in funds table
         if (!fundRepository.existsByFundId(order.getProductID())) {
             throw new IllegalStateException("Fund ID " + order.getProductID() + " does not exist");
         }
-        
-        // Validation 2: accountID should exist in accounts table
         if (!accountRepository.existsByAccountId(order.getAccountID())) {
             throw new IllegalStateException("Account ID " + order.getAccountID() + " does not exist");
         }
-        
-        // Validation 3: amount should be greater than 0
         if (order.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalStateException("Order amount must be greater than 0, got: " + order.getAmount());
         }
-        
-        // Validation 4: orderSide should be BUY or SELL (enum ensures this, but explicit check for clarity)
         if (order.getOrderSide() != OrderSide.BUY && order.getOrderSide() != OrderSide.SELL) {
             throw new IllegalStateException("Order side must be BUY or SELL, got: " + order.getOrderSide());
         }
-        
         logger.info("Order " + order.getOrderID() + " validation successful");
     }
 
@@ -54,6 +51,28 @@ public class OrderManager {
             order.setOrderID(uniqueId);
             logger.info("Assigned unique ID " + uniqueId + " to order");
         }
+
+        // Enrich from fund data
+        Optional<Fund> maybeFund = fundRepository.findByFundId(order.getProductID());
+        if (maybeFund.isPresent()) {
+            Fund fund = maybeFund.get();
+            order.setFundFamily(fund.getFundFamily());
+            order.setTransferAgent(fund.isOffshore() ? "RBC" : "NSCC");
+            // Compute expected units from amount / NAV
+            java.math.BigDecimal nav = fund.getNAV();
+            if (nav != null && nav.compareTo(java.math.BigDecimal.ZERO) > 0 && order.getAmount() != null) {
+                order.setNav(nav);
+                order.setQuantity(order.getAmount().divide(nav, 4, java.math.RoundingMode.HALF_UP));
+            }
+        }
+
+        // Set trade date (today) and settlement date (T+1 business day)
+        LocalDate today = LocalDate.now();
+        order.setTradeDate(today.format(DATE_FMT));
+        order.setSettlementDate(today.plusDays(1).format(DATE_FMT));
+
+        logger.info("Order " + order.getOrderID() + " enriched: transferAgent=" + order.getTransferAgent()
+                + ", tradeDate=" + order.getTradeDate() + ", settlementDate=" + order.getSettlementDate());
     }
 
     public void place(Order order) {
@@ -72,3 +91,4 @@ public class OrderManager {
         logger.info("Booking order: " + order.getOrderID());
     }
 }
+

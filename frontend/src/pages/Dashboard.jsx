@@ -35,8 +35,9 @@ const PIPELINE_STAGES = [
   { name: 'VALIDATED',  color: '#60A5FA' },
   { name: 'ENRICHED',   color: '#3B82F6' },
   { name: 'PLACED',     color: '#2563EB' },
-  { name: 'BULKED',     color: '#FCD34D' },
-  { name: 'CONFIRMED',  color: '#F59E0B' },
+  { name: 'BULKED',      color: '#FCD34D' },
+  { name: 'TRANSMITTED', color: '#F97316' },
+  { name: 'CONFIRMED',   color: '#F59E0B' },
   { name: 'CONTRACTED', color: '#D97706' },
   { name: 'BOOKED',     color: '#059669' },
   { name: 'ERRORED',    color: '#DC2626' },
@@ -198,6 +199,7 @@ export default function Dashboard({ sseEventCount }) {
         <SummaryCard title="Total Bulk Orders" value={data?.totalBulkOrders ?? 0}   icon={<IconBulkOrders  color="#6366F1" />}                 accentColor="#6366F1" />
         <SummaryCard title="Booked Orders"     value={ordersByStatus.BOOKED ?? 0}   icon={<IconBooked      color="var(--color-success)" />}    accentColor="var(--color-success)" />
         <SummaryCard title="Errored Orders"    value={ordersByStatus.ERRORED ?? 0}  icon={<IconErrored     color="var(--color-error)" />}      accentColor="var(--color-error)" />
+        <SummaryCard title="Dedup Hits"        value={data?.dedupHits ?? 0}          icon={<IconErrored     color="#F59E0B" />}                accentColor="#F59E0B" />
       </div>
 
       {/* Existing charts */}

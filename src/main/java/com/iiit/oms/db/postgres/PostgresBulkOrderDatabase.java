@@ -21,9 +21,11 @@ public class PostgresBulkOrderDatabase {
     }
 
     public void upsert(BulkOrder bulkOrder) {
-        String sql = "INSERT INTO bulk_orders(order_id, product_id, order_side, bulk_order_status, quantity, amount, account_id) VALUES (?, ?, ?, ?, ?, ?, ?) "
+        String sql = "INSERT INTO bulk_orders(order_id, product_id, order_side, bulk_order_status, quantity, amount, account_id, transfer_agent, transmission_ref, contract_ref, bulk_nav) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 + "ON CONFLICT (order_id) DO UPDATE SET product_id = EXCLUDED.product_id, order_side = EXCLUDED.order_side, "
-                + "bulk_order_status = EXCLUDED.bulk_order_status, quantity = EXCLUDED.quantity, amount = EXCLUDED.amount, account_id = EXCLUDED.account_id";
+                + "bulk_order_status = EXCLUDED.bulk_order_status, quantity = EXCLUDED.quantity, amount = EXCLUDED.amount, account_id = EXCLUDED.account_id, "
+                + "transfer_agent = EXCLUDED.transfer_agent, transmission_ref = EXCLUDED.transmission_ref, "
+                + "contract_ref = EXCLUDED.contract_ref, bulk_nav = EXCLUDED.bulk_nav";
         try (Connection connection = connectionFactory.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, bulkOrder.getOrderID());
@@ -33,6 +35,10 @@ public class PostgresBulkOrderDatabase {
             statement.setBigDecimal(5, bulkOrder.getQuantity());
             statement.setBigDecimal(6, bulkOrder.getAmount());
             statement.setString(7, bulkOrder.getAccountID());
+            statement.setString(8, bulkOrder.getTransferAgent());
+            statement.setString(9, bulkOrder.getTransmissionRef());
+            statement.setString(10, bulkOrder.getContractRef());
+            statement.setBigDecimal(11, bulkOrder.getBulkNav());
             statement.executeUpdate();
         } catch (SQLException ex) {
             throw new RuntimeException("Failed to upsert bulk order " + bulkOrder.getOrderID(), ex);
@@ -40,7 +46,7 @@ public class PostgresBulkOrderDatabase {
     }
 
     public Optional<BulkOrder> getById(String orderId) {
-        String sql = "SELECT order_id, product_id, order_side, bulk_order_status, quantity, amount, account_id FROM bulk_orders WHERE order_id = ?";
+        String sql = "SELECT order_id, product_id, order_side, bulk_order_status, quantity, amount, account_id, transfer_agent, transmission_ref, contract_ref, bulk_nav FROM bulk_orders WHERE order_id = ?";
         try (Connection connection = connectionFactory.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, orderId);
@@ -56,7 +62,7 @@ public class PostgresBulkOrderDatabase {
     }
 
     public List<BulkOrder> getAll() {
-        String sql = "SELECT order_id, product_id, order_side, bulk_order_status, quantity, amount, account_id FROM bulk_orders";
+        String sql = "SELECT order_id, product_id, order_side, bulk_order_status, quantity, amount, account_id, transfer_agent, transmission_ref, contract_ref, bulk_nav FROM bulk_orders";
         List<BulkOrder> results = new ArrayList<>();
         try (Connection connection = connectionFactory.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql);
@@ -105,14 +111,19 @@ public class PostgresBulkOrderDatabase {
     }
 
     private BulkOrder mapRow(ResultSet rs) throws SQLException {
-        return new BulkOrder(
+        BulkOrder bulkOrder = new BulkOrder(
                 rs.getString("order_id"),
                 rs.getString("product_id"),
                 OrderSide.valueOf(rs.getString("order_side")),
-            BulkOrderStatus.valueOf(rs.getString("bulk_order_status")),
+                BulkOrderStatus.valueOf(rs.getString("bulk_order_status")),
                 rs.getBigDecimal("quantity"),
                 rs.getBigDecimal("amount"),
                 rs.getString("account_id")
         );
+        bulkOrder.setTransferAgent(rs.getString("transfer_agent"));
+        bulkOrder.setTransmissionRef(rs.getString("transmission_ref"));
+        bulkOrder.setContractRef(rs.getString("contract_ref"));
+        bulkOrder.setBulkNav(rs.getBigDecimal("bulk_nav"));
+        return bulkOrder;
     }
 }

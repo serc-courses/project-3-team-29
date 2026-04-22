@@ -9,7 +9,7 @@ import { formatCurrency, formatQuantity } from '../../utils/formatters'
 import { SIDE_COLORS } from '../../constants/statusColors'
 import './OrderDetail.css'
 
-const ORDER_STEPS = ['PLANNED', 'VALIDATED', 'ENRICHED', 'PLACED', 'BULKED', 'CONFIRMED', 'CONTRACTED', 'BOOKED']
+const ORDER_STEPS = ['PLANNED', 'VALIDATED', 'ENRICHED', 'PLACED', 'BULKED', 'TRANSMITTED', 'CONFIRMED', 'CONTRACTED', 'BOOKED']
 
 const STEP_LABELS = {
   PLANNED: 'Order Planned',
@@ -17,6 +17,7 @@ const STEP_LABELS = {
   ENRICHED: 'Enriched',
   PLACED: 'Order Placed',
   BULKED: 'Grouped',
+  TRANSMITTED: 'Transmitted',
   CONFIRMED: 'Confirmed',
   CONTRACTED: 'Contracted',
   BOOKED: 'Completed',
@@ -51,6 +52,7 @@ function NotFoundIcon() {
 function ProgressTracker({ status }) {
   const currentIndex = ORDER_STEPS.indexOf(status)
   const isErrored = status === 'ERRORED'
+  const isTerminal = status === 'BOOKED'
 
   const steps = isErrored ? ORDER_STEPS : ORDER_STEPS
 
@@ -66,18 +68,18 @@ function ProgressTracker({ status }) {
           <div key={step}>
             <div className="progress-step">
               <div className="progress-step-indicator">
-                <div className={`progress-dot${isCompleted ? ' completed' : isCurrent ? ' current' : isErrored ? ' errored' : ''}`}>
-                  {isCompleted && <CheckIcon />}
+                <div className={`progress-dot${isCompleted || (isCurrent && isTerminal) ? ' completed' : isCurrent ? ' current' : isErrored ? ' errored' : ''}`}>
+                  {(isCompleted || (isCurrent && isTerminal)) && <CheckIcon />}
                 </div>
                 {!isLast && (
-                  <div className={`progress-line${isCompleted ? ' completed' : ''}`} />
+                  <div className={`progress-line${isCompleted || (isCurrent && isTerminal) ? ' completed' : ''}`} />
                 )}
               </div>
               <div className="progress-step-content">
                 <span className={`progress-step-label${isCurrent ? ' current' : isCompleted ? ' done' : ''}`}>
                   {STEP_LABELS[step]}
                 </span>
-                {isCurrent && <span className="progress-step-badge">In progress</span>}
+                {isCurrent && !isTerminal && <span className="progress-step-badge">In progress</span>}
               </div>
             </div>
           </div>
@@ -110,10 +112,10 @@ function DetailRow({ label, value, mono }) {
   )
 }
 
-export default function OrderDetail() {
+export default function OrderDetail({ sseEventCount = 0 }) {
   const { orderId } = useParams()
   const navigate = useNavigate()
-  const { data, loading } = useFetch(() => getOrders({ orderID: orderId }), [orderId])
+  const { data, loading } = useFetch(() => getOrders({ orderID: orderId }), [orderId, sseEventCount])
 
   const order = data?.[0]
   const sideColors = SIDE_COLORS[order?.orderSide] || { text: '#64748B', bg: '#F1F5F9' }
@@ -165,7 +167,7 @@ export default function OrderDetail() {
         {/* Hero */}
         <div className="card card-elevated order-detail-hero">
           <p className="order-detail-fund-name">{order.fundName || order.fundID}</p>
-          <p className="order-detail-fund-id font-mono text-muted">{order.fundID}</p>
+          <p className="order-detail-fund-id text-muted">{order.fundFamily || ''}</p>
           <div className="order-detail-amount">
             <AmountDisplay amount={order.amount} size="lg" />
           </div>
@@ -180,9 +182,6 @@ export default function OrderDetail() {
               style={{ color: sideColors.text, background: sideColors.bg }}
             >
               {order.orderSide}
-            </span>
-            <span className="font-mono text-muted" style={{ fontSize: 'var(--text-sm)' }}>
-              {order.accountID}
             </span>
           </div>
         </div>
@@ -206,16 +205,18 @@ export default function OrderDetail() {
             <span className="section-title">Order Details</span>
           </div>
           <div className="card card-elevated">
-            <DetailRow label="Order ID" value={order.orderID} mono />
-            <DetailRow label="Fund ID" value={order.fundID} mono />
-            <DetailRow label="Account" value={order.accountID} mono />
+            <DetailRow label="Order Reference" value={order.orderID} mono />
+            <DetailRow label="Fund" value={order.fundName || order.fundID} />
+            <DetailRow label="Fund Family" value={order.fundFamily || '—'} />
             <DetailRow label="Side" value={
               <span style={{ color: sideColors.text, fontWeight: 600 }}>{order.orderSide}</span>
             } />
             <DetailRow label="Amount" value={formatCurrency(order.amount)} mono />
-            <DetailRow label="Quantity" value={order.quantity ? formatQuantity(order.quantity) : '—'} mono />
+            <DetailRow label="Trade Date" value={order.tradeDate || '—'} mono />
+            <DetailRow label="Settlement Date" value={order.settlementDate || '—'} mono />
             <DetailRow label="NAV" value={order.nav ? formatCurrency(order.nav) : '—'} mono />
-            <DetailRow label="Bulk ID" value={order.bulkOrderID || '—'} mono />
+            <DetailRow label="Units Allocated" value={order.allocatedShares ? formatQuantity(order.allocatedShares) : '—'} mono />
+            <DetailRow label="Contract Reference" value={order.contractRef || '—'} mono />
             <DetailRow label="Status" value={<StatusPill status={order.orderStatus} />} />
           </div>
         </div>

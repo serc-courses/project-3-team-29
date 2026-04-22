@@ -1,5 +1,8 @@
 package com.iiit.oms.processor;
 
+import com.iiit.oms.interfaces.SseBroadcaster;
+import com.iiit.oms.kafka.KafkaOrderEventPublisher;
+import com.iiit.oms.model.AuditLogEntry;
 import com.iiit.oms.model.BulkOrder;
 import com.iiit.oms.model.BulkOrderStatus;
 import com.iiit.oms.model.Fund;
@@ -7,11 +10,16 @@ import com.iiit.oms.model.Order;
 import com.iiit.oms.model.OrderSide;
 import com.iiit.oms.model.OrderStatus;
 import com.iiit.oms.readmodel.OrderProjectionListener;
+import com.iiit.oms.repository.AuditLogRepository;
 import com.iiit.oms.repository.BulkOrderRepository;
 import com.iiit.oms.repository.BulkOrderMappingRepository;
 import com.iiit.oms.repository.FundRepository;
 import com.iiit.oms.repository.OrderRepository;
+import com.iiit.oms.transfer.TransferAgentRouter;
+import com.iiit.oms.transfer.TransmissionAck;
 import com.iiit.oms.util.UniqueIdGenerator;
+import redis.clients.jedis.Jedis;
+import redis.clients.jedis.JedisPool;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -19,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-//import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -39,8 +46,14 @@ public class BatchoutScheduler {
     private final FundRepository fundRepository;
     private final OrderProjectionListener projectionListener;
     private final ScheduledExecutorService scheduler;
-    //private final Map<String, BulkOrder> bulkOrders;
     private ScheduledFuture<?> batchoutTask;
+
+    // Optional dependencies wired after construction
+    private TransferAgentRouter transferAgentRouter;
+    private AuditLogRepository auditLogRepository;
+    private SseBroadcaster sseBroadcaster;
+    private KafkaOrderEventPublisher kafkaPublisher;
+    private JedisPool jedisPool;  // for outbound bulk dedup
 
     public BatchoutScheduler(OrderRepository orderRepository, BulkOrderMappingRepository bulkOrderMappingRepository, BulkOrderRepository bulkOrderRepository) {
         this(orderRepository, bulkOrderMappingRepository, bulkOrderRepository, null, null);
@@ -57,7 +70,26 @@ public class BatchoutScheduler {
         this.fundRepository = fundRepository;
         this.projectionListener = projectionListener;
         this.scheduler = Executors.newScheduledThreadPool(1);
-        //this.bulkOrders = new ConcurrentHashMap<>();
+    }
+
+    public void setTransferAgentRouter(TransferAgentRouter transferAgentRouter) {
+        this.transferAgentRouter = transferAgentRouter;
+    }
+
+    public void setAuditLogRepository(AuditLogRepository auditLogRepository) {
+        this.auditLogRepository = auditLogRepository;
+    }
+
+    public void setSseBroadcaster(SseBroadcaster sseBroadcaster) {
+        this.sseBroadcaster = sseBroadcaster;
+    }
+
+    public void setKafkaPublisher(KafkaOrderEventPublisher kafkaPublisher) {
+        this.kafkaPublisher = kafkaPublisher;
+    }
+
+    public void setJedisPool(JedisPool jedisPool) {
+        this.jedisPool = jedisPool;
     }
 
     public List<BulkOrder> batchoutPlacedOrders() {
@@ -88,6 +120,14 @@ public class BatchoutScheduler {
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
             String bulkOrderId = UniqueIdGenerator.generate("BLK");
+
+            // Determine transfer agent from the first order in the batch (all same fund → same TA)
+            String transferAgent = ordersForBatch.stream()
+                    .map(Order::getTransferAgent)
+                    .filter(Objects::nonNull)
+                    .findFirst()
+                    .orElse("NSCC");
+
             BulkOrder bulkOrder = new BulkOrder(
                     bulkOrderId,
                     key.productID,
@@ -97,20 +137,22 @@ public class BatchoutScheduler {
                     aggregatedAmount,
                     FIRM_ACCOUNT_ID
             );
+            bulkOrder.setTransferAgent(transferAgent);
 
             List<String> constituentOrderIds = ordersForBatch.stream()
                     .map(Order::getOrderID)
                     .collect(Collectors.toList());
 
-            //bulkOrders.put(bulkOrderId, bulkOrder);
             bulkOrderRepository.save(bulkOrder);
             bulkOrderMappingRepository.save(bulkOrderId, constituentOrderIds);
             Optional<Fund> maybeFund = findFund(key.productID);
 
-            // Mark constituent orders as BULKED once they are grouped into a bulk order.
+            // Mark constituent orders as BULKED
             for (Order individualOrder : ordersForBatch) {
+                OrderStatus prevStatus = individualOrder.getOrderStatus();
                 individualOrder.setOrderStatus(OrderStatus.BULKED);
                 orderRepository.save(individualOrder);
+                writeOrderAuditLog(individualOrder.getOrderID(), prevStatus, OrderStatus.BULKED, "BatchoutScheduler", "bulkOrderId=" + bulkOrderId);
                 if (projectionListener != null && maybeFund.isPresent()) {
                     projectionListener.onOrderStatusChanged(individualOrder, bulkOrder, maybeFund.get());
                 }
@@ -120,13 +162,104 @@ public class BatchoutScheduler {
                 projectionListener.onBulkOrderCreated(bulkOrder, maybeFund.get(), constituentOrderIds);
             }
 
-            createdBulkOrders.add(bulkOrder);
+            // ---- AUTO-TRANSMIT to Transfer Agent ----
+            transmitBulkOrder(bulkOrder, ordersForBatch, maybeFund.orElse(null), constituentOrderIds);
 
+            // ---- SSE broadcast for BULKED/TRANSMITTED events ----
+            if (sseBroadcaster != null) {
+                for (Order order : ordersForBatch) {
+                    sseBroadcaster.broadcastOrderUpdate(order, bulkOrderId);
+                }
+                sseBroadcaster.broadcastBulkOrderUpdate(bulkOrder, constituentOrderIds);
+            }
+
+            // ---- Kafka events ----
+            if (kafkaPublisher != null && kafkaPublisher.isEnabled()) {
+                kafkaPublisher.publishBulkOrderCreated(bulkOrder);
+                for (Order order : ordersForBatch) {
+                    kafkaPublisher.publishOrderStateChanged(order, "PLACED");
+                }
+            }
+
+            createdBulkOrders.add(bulkOrder);
             LOGGER.info("Created bulk order " + bulkOrderId + " for product " + key.productID
-                    + " and side " + key.orderSide + " with " + constituentOrderIds.size() + " order(s)");
+                    + " side=" + key.orderSide + " ta=" + transferAgent + " constituents=" + constituentOrderIds.size());
         }
 
         return createdBulkOrders;
+    }
+
+    private void transmitBulkOrder(BulkOrder bulkOrder, List<Order> ordersForBatch,
+                                   Fund fund, List<String> constituentOrderIds) {
+        if (transferAgentRouter == null) {
+            LOGGER.warning("TransferAgentRouter not configured – skipping auto-transmit for " + bulkOrder.getOrderID());
+            return;
+        }
+        // --- Outbound dedup via Redis: prevent double-transmission of the same bulk order ---
+        String dedupKey = "oms:bulk:transmitted:" + bulkOrder.getOrderID();
+        if (jedisPool != null) {
+            try (Jedis j = jedisPool.getResource()) {
+                Long set = j.setnx(dedupKey, "1");
+                if (set == 0) {
+                    LOGGER.warning("Bulk order " + bulkOrder.getOrderID() + " already transmitted (Redis dedup) – skipping");
+                    return;
+                }
+                j.expire(dedupKey, 7 * 24 * 3600); // keep for 7 days
+            } catch (Exception ex) {
+                LOGGER.warning("Redis dedup check failed for " + bulkOrder.getOrderID() + ": " + ex.getMessage() + " – proceeding without dedup");
+            }
+        }
+        try {
+            TransmissionAck ack = transferAgentRouter.transmit(bulkOrder);
+            if (ack.isAccepted()) {
+                bulkOrder.setTransmissionRef(ack.getReferenceNumber());
+                bulkOrder.setBulkOrderStatus(BulkOrderStatus.TRANSMITTED);
+                bulkOrderRepository.save(bulkOrder);
+
+                // Log transmission
+                if (auditLogRepository instanceof com.iiit.oms.repository.postgres.PostgresAuditLogRepository) {
+                    ((com.iiit.oms.repository.postgres.PostgresAuditLogRepository) auditLogRepository)
+                            .logTransmission(bulkOrder.getOrderID(), ack.getTransferAgent(), ack.getReferenceNumber());
+                }
+
+                // Mark individual orders as TRANSMITTED
+                for (Order order : ordersForBatch) {
+                    OrderStatus prevStatus = order.getOrderStatus();
+                    order.setOrderStatus(OrderStatus.TRANSMITTED);
+                    orderRepository.save(order);
+                    writeOrderAuditLog(order.getOrderID(), prevStatus, OrderStatus.TRANSMITTED, "BatchoutScheduler",
+                            "transmissionRef=" + ack.getReferenceNumber() + ", ta=" + ack.getTransferAgent());
+                }
+
+                // Notify projection store
+                if (projectionListener != null && fund != null) {
+                    projectionListener.onBulkOrderCreated(bulkOrder, fund, constituentOrderIds);
+                    for (Order order : ordersForBatch) {
+                        projectionListener.onOrderStatusChanged(order, bulkOrder, fund);
+                    }
+                }
+                // SSE broadcast for TRANSMITTED
+                if (sseBroadcaster != null) {
+                    for (Order order : ordersForBatch) {
+                        sseBroadcaster.broadcastOrderUpdate(order, bulkOrder.getOrderID());
+                    }
+                    sseBroadcaster.broadcastBulkOrderUpdate(bulkOrder, constituentOrderIds);
+                }
+                // Kafka events for transmission
+                if (kafkaPublisher != null && kafkaPublisher.isEnabled()) {
+                    kafkaPublisher.publishBulkOrderTransmitted(bulkOrder);
+                    for (Order order : ordersForBatch) {
+                        kafkaPublisher.publishOrderStateChanged(order, "BULKED");
+                    }
+                }
+                LOGGER.info("Bulk order " + bulkOrder.getOrderID() + " transmitted to " + ack.getTransferAgent()
+                        + " ref=" + ack.getReferenceNumber());
+            } else {
+                LOGGER.severe("TA rejected bulk order " + bulkOrder.getOrderID() + ": " + ack.getMessage());
+            }
+        } catch (Exception ex) {
+            LOGGER.log(Level.SEVERE, "Failed to transmit bulk order " + bulkOrder.getOrderID(), ex);
+        }
     }
 
     public void startBatchout() {
@@ -164,10 +297,6 @@ public class BatchoutScheduler {
         }
     }
 
-    /*public List<BulkOrder> findAllBulkOrders1() {
-        return new ArrayList<>(bulkOrders.values());
-    }*/
-
     private void runBatchoutCycle() {
         try {
             LOGGER.info("BatchoutScheduler wake-up triggered");
@@ -178,37 +307,40 @@ public class BatchoutScheduler {
         }
     }
 
-    private static final class BatchKey {
-        private final String productID;
-        private final OrderSide orderSide;
+    private Optional<Fund> findFund(String productID) {
+        if (fundRepository == null) return Optional.empty();
+        return fundRepository.findByFundId(productID);
+    }
 
-        private BatchKey(String productID, OrderSide orderSide) {
+    private void writeOrderAuditLog(String orderID, OrderStatus from, OrderStatus to, String actor, String details) {
+        if (auditLogRepository == null) return;
+        try {
+            auditLogRepository.log(new AuditLogEntry(orderID, from != null ? from.name() : null, to.name(), actor, details));
+        } catch (Exception ex) {
+            LOGGER.warning("Failed to write audit log for order " + orderID + ": " + ex.getMessage());
+        }
+    }
+
+    private static final class BatchKey {
+        final String productID;
+        final OrderSide orderSide;
+
+        BatchKey(String productID, OrderSide orderSide) {
             this.productID = productID;
             this.orderSide = orderSide;
         }
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (!(o instanceof BatchKey)) {
-                return false;
-            }
-            BatchKey batchKey = (BatchKey) o;
-            return Objects.equals(productID, batchKey.productID) && orderSide == batchKey.orderSide;
+            if (this == o) return true;
+            if (!(o instanceof BatchKey)) return false;
+            BatchKey that = (BatchKey) o;
+            return Objects.equals(productID, that.productID) && orderSide == that.orderSide;
         }
 
         @Override
         public int hashCode() {
             return Objects.hash(productID, orderSide);
         }
-    }
-
-    private Optional<Fund> findFund(String productID) {
-        if (fundRepository == null || productID == null || productID.isBlank()) {
-            return Optional.empty();
-        }
-        return fundRepository.findByFundId(productID);
     }
 }

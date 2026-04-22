@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import './Orders.css'
 import { getOrderViews } from '../api/ordersApi'
 import DataTable from '../components/DataTable/DataTable'
@@ -21,31 +21,124 @@ const COLUMNS = [
     render: (v) => <span className={v === 'BUY' ? 'side-buy' : 'side-sell'}>{v}</span>,
   },
   { key: 'amount', label: 'Amount', align: 'right', render: (v) => formatCurrency(v) },
-  { key: 'quantity', label: 'Qty', align: 'right', render: (v) => formatQuantity(v) },
-  { key: 'nav', label: 'NAV', align: 'right', render: (v) => formatCurrency(v) },
+  {
+    key: 'qty_display', label: 'Qty', align: 'right',
+    sortable: false,
+    render: (_, row) => {
+      const qty = row.allocatedShares ?? row.quantity
+      return qty ? formatQuantity(qty) : '—'
+    },
+  },
+  { key: 'nav', label: 'NAV', align: 'right', render: (v) => v ? formatCurrency(v) : '—' },
   { key: 'orderStatus', label: 'Status', align: 'center', render: (v) => <StatusBadge status={v} /> },
-  { key: 'bulkOrderID', label: 'Bulk ID', render: (v) => v ? <span className="font-mono text-sm">{v}</span> : '—' },
 ]
 
-export default function Orders() {
+function Field({ label, value, mono }) {
+  return (
+    <div className="drawer-field">
+      <span className="drawer-field-label">{label}</span>
+      <span className={`drawer-field-value${mono ? ' mono' : ''}${!value || value === '—' ? ' muted' : ''}`}>
+        {value ?? '—'}
+      </span>
+    </div>
+  )
+}
+
+function OrderDrawer({ order, onClose }) {
+  if (!order) return null
+  return (
+    <>
+      <div className="order-drawer-overlay" onClick={onClose} />
+      <div className="order-drawer">
+        <div className="order-drawer-header">
+          <span className="order-drawer-title">Order Detail</span>
+          <button className="order-drawer-close" onClick={onClose} aria-label="Close">✕</button>
+        </div>
+        <div className="order-drawer-body">
+          <div className="drawer-fund-hero">
+            <p className="drawer-fund-name">{order.fundName || order.fundID}</p>
+            <p className="drawer-amount">{formatCurrency(order.amount)}</p>
+            <div className="drawer-badges">
+              <StatusBadge status={order.orderStatus} />
+              <span className={order.orderSide === 'BUY' ? 'side-buy' : 'side-sell'} style={{ fontWeight: 600, fontSize: '0.82rem' }}>
+                {order.orderSide}
+              </span>
+            </div>
+          </div>
+
+          <div className="drawer-section-label">Order Info</div>
+          <Field label="Order ID"   value={order.orderID}   mono />
+          <Field label="Account"    value={order.accountID} mono />
+          <Field label="Bulk ID"    value={order.bulkOrderID || '—'} mono />
+          <Field label="Status"     value={order.orderStatus} />
+
+          <div className="drawer-section-label">Fund Details</div>
+          <Field label="Fund"          value={order.fundName || order.fundID} />
+          <Field label="Fund Family"   value={order.fundFamily || '—'} />
+          <Field label="Transfer Agent" value={order.transferAgent || '—'} />
+          <Field label="NAV"           value={order.nav ? formatCurrency(order.nav) : '—'} mono />
+
+          <div className="drawer-section-label">Financials</div>
+          <Field label="Amount"       value={formatCurrency(order.amount)} mono />
+          <Field label="Expected Qty" value={order.quantity ? formatQuantity(order.quantity) : '—'} mono />
+          <Field label="Allocated Shares" value={order.allocatedShares ? formatQuantity(order.allocatedShares) : '—'} mono />
+          <Field label="Contract Ref" value={order.contractRef || '—'} mono />
+
+          <div className="drawer-section-label">Dates</div>
+          <Field label="Trade Date"      value={order.tradeDate || '—'} mono />
+          <Field label="Settlement Date" value={order.settlementDate || '—'} mono />
+        </div>
+      </div>
+    </>
+  )
+}
+
+export default function Orders({ sseEventCount = 0 }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [statusFilter, setStatusFilter] = useState('')
   const [accountFilter, setAccountFilter] = useState('')
   const [sideFilter, setSideFilter] = useState('')
+  const [fundFilter, setFundFilter] = useState('')
   const [search, setSearch] = useState('')
+  const [selectedOrder, setSelectedOrder] = useState(null)
+  const [searchParams] = useSearchParams()
+
+  // Pre-fill filters from URL params (e.g., from Accounts or Funds page click)
+  useEffect(() => {
+    const acc = searchParams.get('accountID')
+    const fund = searchParams.get('fundID')
+    if (acc) setAccountFilter(acc)
+    if (fund) setFundFilter(fund)
+  }, []) // run once on mount
 
   useEffect(() => {
+    if (sseEventCount === 0) setLoading(true)
     getOrderViews()
-      .then(setOrders)
+      .then((data) => {
+        setOrders(data)
+        // Keep selected order in sync with live data
+        if (selectedOrder) {
+          const fresh = data.find((o) => o.orderID === selectedOrder.orderID)
+          if (fresh) setSelectedOrder(fresh)
+        }
+      })
       .catch((err) => setError(err.message || 'Failed to load orders'))
       .finally(() => setLoading(false))
-  }, [])
+  }, [sseEventCount])
 
   const accountOptions = useMemo(() => {
     const ids = [...new Set(orders.map((o) => o.accountID).filter(Boolean))]
     return ids.map((id) => ({ value: id, label: id }))
+  }, [orders])
+
+  const fundOptions = useMemo(() => {
+    const names = [...new Set(orders.map((o) => o.fundID).filter(Boolean))]
+    return names.map((id) => {
+      const o = orders.find((x) => x.fundID === id)
+      return { value: id, label: o?.fundName || id }
+    })
   }, [orders])
 
   const filtered = useMemo(() => {
@@ -53,10 +146,11 @@ export default function Orders() {
       if (statusFilter && o.orderStatus !== statusFilter) return false
       if (accountFilter && o.accountID !== accountFilter) return false
       if (sideFilter && o.orderSide !== sideFilter) return false
+      if (fundFilter && o.fundID !== fundFilter) return false
       if (search && !o.orderID?.toLowerCase().includes(search.toLowerCase())) return false
       return true
     })
-  }, [orders, statusFilter, accountFilter, sideFilter, search])
+  }, [orders, statusFilter, accountFilter, sideFilter, fundFilter, search])
 
   if (loading) {
     return (
@@ -70,9 +164,10 @@ export default function Orders() {
   if (error) return <div className="orders-error">{error}</div>
 
   const filters = [
-    { key: 'status', label: 'Status', options: STATUS_OPTIONS, value: statusFilter, onChange: setStatusFilter },
-    { key: 'account', label: 'Account', options: accountOptions, value: accountFilter, onChange: setAccountFilter },
-    { key: 'side', label: 'Side', options: SIDE_OPTIONS, value: sideFilter, onChange: setSideFilter },
+    { key: 'status',   label: 'Status',   options: STATUS_OPTIONS,  value: statusFilter,  onChange: setStatusFilter },
+    { key: 'account',  label: 'Account',  options: accountOptions,  value: accountFilter, onChange: setAccountFilter },
+    { key: 'side',     label: 'Side',     options: SIDE_OPTIONS,    value: sideFilter,    onChange: setSideFilter },
+    { key: 'fund',     label: 'Fund',     options: fundOptions,     value: fundFilter,    onChange: setFundFilter },
   ]
 
   return (
@@ -95,8 +190,12 @@ export default function Orders() {
           columns={COLUMNS}
           data={filtered}
           emptyMessage="No orders found"
+          onRowClick={setSelectedOrder}
         />
       </div>
+
+      <OrderDrawer order={selectedOrder} onClose={() => setSelectedOrder(null)} />
     </div>
   )
 }
+

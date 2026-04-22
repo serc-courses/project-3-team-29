@@ -7,6 +7,8 @@ public class Fund {
     private String fundName;
     private String fundFamily;
     private BigDecimal NAV;
+    private String transferAgent = "NSCC";
+    private boolean offshore;
 
     public Fund() {
     }
@@ -48,6 +50,15 @@ public class Fund {
 
     public void setNAV(BigDecimal NAV) {
         this.NAV = NAV;
+    }
+
+    public String getTransferAgent() { return transferAgent; }
+    public void setTransferAgent(String transferAgent) { this.transferAgent = transferAgent; }
+
+    public boolean isOffshore() { return offshore; }
+    public void setOffshore(boolean offshore) {
+        this.offshore = offshore;
+        this.transferAgent = offshore ? "RBC" : "NSCC";
     }
 
     @Override

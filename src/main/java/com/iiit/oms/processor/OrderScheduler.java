@@ -1,10 +1,17 @@
 package com.iiit.oms.processor;
 
+import com.iiit.oms.interfaces.SseBroadcaster;
+import com.iiit.oms.kafka.KafkaOrderEventPublisher;
+import com.iiit.oms.model.Fund;
 import com.iiit.oms.model.Order;
+import com.iiit.oms.model.OrderStatus;
+import com.iiit.oms.readmodel.OrderProjectionListener;
+import com.iiit.oms.repository.FundRepository;
 import com.iiit.oms.repository.OrderRepository;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -22,10 +29,32 @@ public class OrderScheduler {
     private final ScheduledExecutorService scheduler;
     private ScheduledFuture<?> pollingTask;
 
+    // Optional dependencies for real-time SSE broadcasting
+    private OrderProjectionListener projectionListener;
+    private FundRepository fundRepository;
+    private SseBroadcaster sseBroadcaster;
+    private KafkaOrderEventPublisher kafkaPublisher;
+
     public OrderScheduler(OrderRepository orderRepository, OrderStateMachine orderStateMachine) {
         this.orderRepository = Objects.requireNonNull(orderRepository, "orderRepository must not be null");
         this.orderStateMachine = Objects.requireNonNull(orderStateMachine, "orderStateMachine must not be null");
         this.scheduler = Executors.newScheduledThreadPool(1);
+    }
+
+    public void setProjectionListener(OrderProjectionListener projectionListener) {
+        this.projectionListener = projectionListener;
+    }
+
+    public void setFundRepository(FundRepository fundRepository) {
+        this.fundRepository = fundRepository;
+    }
+
+    public void setSseBroadcaster(SseBroadcaster sseBroadcaster) {
+        this.sseBroadcaster = sseBroadcaster;
+    }
+
+    public void setKafkaPublisher(KafkaOrderEventPublisher kafkaPublisher) {
+        this.kafkaPublisher = kafkaPublisher;
     }
 
     public int pollAndProcessPendingOrders() {
@@ -40,10 +69,26 @@ public class OrderScheduler {
 
         for (Order order : pendingOrders) {
             try {
+                OrderStatus beforeStatus = order.getOrderStatus();
                 LOGGER.info("Polling order for processing: " + order);
                 Order processedOrder = orderStateMachine.process(order);
                 processedOrder.setProcessed(true);
                 orderRepository.save(processedOrder);
+
+                // Update projection + broadcast SSE events for real-time UI
+                if (projectionListener != null && fundRepository != null) {
+                    Optional<Fund> maybeFund = fundRepository.findByFundId(processedOrder.getProductID());
+                    if (maybeFund.isPresent()) {
+                        projectionListener.onOrderStatusChanged(processedOrder, null, maybeFund.get());
+                        if (sseBroadcaster != null) {
+                            sseBroadcaster.broadcastOrderUpdate(processedOrder, null);
+                        }
+                    }
+                }
+                // Publish Kafka event
+                if (kafkaPublisher != null && kafkaPublisher.isEnabled()) {
+                    kafkaPublisher.publishOrderStateChanged(processedOrder, beforeStatus.name());
+                }
             } catch (RuntimeException ex) {
                 LOGGER.log(Level.SEVERE, "Failed to process order: " + order.getOrderID(), ex);
             }
@@ -88,3 +133,4 @@ public class OrderScheduler {
         }
     }
 }
+

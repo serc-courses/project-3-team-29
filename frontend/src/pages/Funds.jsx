@@ -86,32 +86,32 @@ export default function Funds() {
                 <div className="fund-card-divider" />
 
                 <div className="fund-card-stats">
-                  {/* <div className="fund-stat-row">
+                  <div className="fund-stat-row">
                     <span className="fund-stat-label">Orders</span>
                     <span className="fund-stat-value">{orderCount}</span>
-                  </div> */}
+                  </div>
 
-                  {/* <div className="fund-stat-row">
+                  <div className="fund-stat-row">
                     <span className="fund-stat-label">Total Amount</span>
                     <span className="fund-stat-value">
                       {formatCurrency(totalAmount)}
                     </span>
-                  </div> */}
+                  </div>
 
-                  {/* <div className="fund-stat-row">
+                  <div className="fund-stat-row">
                     <span className="fund-stat-label">Buy / Sell</span>
                     <div className="fund-side-badges">
                       <span className="fund-side-badge buy">B {buyCount}</span>
                       <span className="fund-side-badge sell">S {sellCount}</span>
                     </div>
-                  </div> */}
+                  </div>
 
-                  {/* <div className="fund-stat-row">
+                  <div className="fund-stat-row">
                     <span className="fund-stat-label">Total Qty</span>
                     <span className="fund-stat-value">
                       {formatQuantity(totalQuantity)}
                     </span>
-                  </div> */}
+                  </div>
                 </div>
               </div>
             )

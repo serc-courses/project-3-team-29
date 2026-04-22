@@ -37,6 +37,8 @@ public final class FundMockDataUtil {
                 String fundName = "CharlesSchwabb " + sector + " Mutual Fund " + i;
                 BigDecimal nav = BigDecimal.valueOf(10 + (index * 1.37)).setScale(2, RoundingMode.HALF_UP);
                 Fund fund = new Fund(fundID, fundName, "CharlesSchwabb", nav);
+                // FND041-FND050 (Telecommunications sector) are offshore funds → RBC routing
+                fund.setOffshore(index >= 41 && index <= 50);
                 inserted.add(repository.save(fund));
                 index++;
             }

@@ -110,7 +110,7 @@ export default function FundDetail() {
         {/* Stats */}
         <div className="fund-detail-stats">
           <div className="fund-detail-stat card">
-            <span className="fund-detail-stat-value font-mono">{displayFund.orderCount ?? 0}</span>
+            <span className="fund-detail-stat-value font-mono">{ordersData?.length ?? displayFund.orderCount ?? 0}</span>
             <span className="fund-detail-stat-label">orders</span>
           </div>
           <div className="fund-detail-stat card">

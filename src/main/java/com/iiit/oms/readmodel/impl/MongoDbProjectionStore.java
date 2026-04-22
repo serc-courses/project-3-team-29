@@ -69,6 +69,12 @@ public class MongoDbProjectionStore implements ProjectionStore {
                 order.getOrderStatus().toString(),
                 bulkOrder != null ? bulkOrder.getOrderID() : null
         );
+        view.setFundFamily(order.getFundFamily() != null ? order.getFundFamily() : fund.getFundFamily());
+        view.setTransferAgent(order.getTransferAgent());
+        view.setTradeDate(order.getTradeDate());
+        view.setSettlementDate(order.getSettlementDate());
+        view.setContractRef(order.getContractRef());
+        view.setAllocatedShares(order.getAllocatedShares());
         saveOrderView(view);
     }
 
@@ -80,8 +86,14 @@ public class MongoDbProjectionStore implements ProjectionStore {
             view.setOrderStatus(order.getOrderStatus().toString());
             view.setQuantity(order.getQuantity());
             view.setAmount(order.getAmount());
-            view.setNAV(fund.getNAV());
+            view.setNav(fund.getNAV());
             view.setBulkOrderID(bulkOrder != null ? bulkOrder.getOrderID() : null);
+            view.setFundFamily(order.getFundFamily() != null ? order.getFundFamily() : fund.getFundFamily());
+            view.setTransferAgent(order.getTransferAgent());
+            view.setTradeDate(order.getTradeDate());
+            view.setSettlementDate(order.getSettlementDate());
+            view.setContractRef(order.getContractRef());
+            view.setAllocatedShares(order.getAllocatedShares());
             saveOrderView(view);
         }
     }
@@ -236,13 +248,18 @@ public class MongoDbProjectionStore implements ProjectionStore {
                 .append("orderSide", view.getOrderSide())
                 .append("amount", view.getAmount())
                 .append("quantity", view.getQuantity())
-                .append("nav", view.getNAV())
-                .append("orderStatus", view.getOrderStatus())
-                .append("bulkOrderID", view.getBulkOrderID());
+                .append("nav", view.getNav())
+                .append("bulkOrderID", view.getBulkOrderID())
+                .append("fundFamily", view.getFundFamily())
+                .append("transferAgent", view.getTransferAgent())
+                .append("tradeDate", view.getTradeDate())
+                .append("settlementDate", view.getSettlementDate())
+                .append("contractRef", view.getContractRef())
+                .append("allocatedShares", view.getAllocatedShares());
     }
 
     private OrderView documentToOrderView(Document doc) {
-        return new OrderView(
+        OrderView view = new OrderView(
                 doc.getString("orderID"),
                 doc.getString("accountID"),
                 doc.getString("fundID"),
@@ -257,6 +274,15 @@ public class MongoDbProjectionStore implements ProjectionStore {
                 doc.getString("orderStatus"),
                 doc.getString("bulkOrderID")
         );
+        view.setFundFamily(doc.getString("fundFamily"));
+        view.setTransferAgent(doc.getString("transferAgent"));
+        view.setTradeDate(doc.getString("tradeDate"));
+        view.setSettlementDate(doc.getString("settlementDate"));
+        view.setContractRef(doc.getString("contractRef"));
+        if (doc.get("allocatedShares", org.bson.types.Decimal128.class) != null) {
+            view.setAllocatedShares(doc.get("allocatedShares", org.bson.types.Decimal128.class).bigDecimalValue());
+        }
+        return view;
     }
 
     private Document bulkOrderViewToDocument(BulkOrderView view) {

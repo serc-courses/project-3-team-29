@@ -12,6 +12,15 @@ public class Order {
     private OrderStatus orderStatus = OrderStatus.PLANNED;
     private boolean isProcessed;
     private String errorDescription;
+    // Enrichment fields
+    private String transferAgent;
+    private String fundFamily;
+    private String tradeDate;
+    private String settlementDate;
+    // Post-contract fields
+    private String contractRef;
+    private BigDecimal nav;
+    private BigDecimal allocatedShares;
 
     public Order() {
     }
@@ -153,6 +162,27 @@ public class Order {
     public void setErrorDescription(String errorDescription) {
         this.errorDescription = errorDescription;
     }
+
+    public String getTransferAgent() { return transferAgent; }
+    public void setTransferAgent(String transferAgent) { this.transferAgent = transferAgent; }
+
+    public String getFundFamily() { return fundFamily; }
+    public void setFundFamily(String fundFamily) { this.fundFamily = fundFamily; }
+
+    public String getTradeDate() { return tradeDate; }
+    public void setTradeDate(String tradeDate) { this.tradeDate = tradeDate; }
+
+    public String getSettlementDate() { return settlementDate; }
+    public void setSettlementDate(String settlementDate) { this.settlementDate = settlementDate; }
+
+    public String getContractRef() { return contractRef; }
+    public void setContractRef(String contractRef) { this.contractRef = contractRef; }
+
+    public BigDecimal getNav() { return nav; }
+    public void setNav(BigDecimal nav) { this.nav = nav; }
+
+    public BigDecimal getAllocatedShares() { return allocatedShares; }
+    public void setAllocatedShares(BigDecimal allocatedShares) { this.allocatedShares = allocatedShares; }
 
     @Override
     public String toString() {

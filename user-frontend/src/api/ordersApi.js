@@ -1,8 +1,10 @@
 import { api } from './client'
 
 export function planOrders(orders) {
-  return api.post('/orders/plan', orders)
+  const idempotencyKey = crypto.randomUUID()
+  return api.post('/orders/plan', orders, { 'X-Idempotency-Key': idempotencyKey })
 }
+
 
 export function getOrderStatus(orderID) {
   return api.get(`/orders/status?orderID=${encodeURIComponent(orderID)}`)

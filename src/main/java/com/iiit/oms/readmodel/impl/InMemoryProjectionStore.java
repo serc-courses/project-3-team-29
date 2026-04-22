@@ -30,6 +30,13 @@ public class InMemoryProjectionStore implements ProjectionStore {
                 order.getOrderStatus().toString(),
                 bulkOrder != null ? bulkOrder.getOrderID() : null
         );
+        // Populate enrichment fields from Order
+        view.setFundFamily(order.getFundFamily() != null ? order.getFundFamily() : fund.getFundFamily());
+        view.setTransferAgent(order.getTransferAgent());
+        view.setTradeDate(order.getTradeDate());
+        view.setSettlementDate(order.getSettlementDate());
+        view.setContractRef(order.getContractRef());
+        view.setAllocatedShares(order.getAllocatedShares());
         orderViews.put(order.getOrderID(), view);
     }
 
@@ -40,8 +47,15 @@ public class InMemoryProjectionStore implements ProjectionStore {
             view.setOrderStatus(order.getOrderStatus().toString());
             view.setQuantity(order.getQuantity());
             view.setAmount(order.getAmount());
-            view.setNAV(fund.getNAV());
+            view.setNav(fund.getNAV());
             view.setBulkOrderID(bulkOrder != null ? bulkOrder.getOrderID() : null);
+            // Sync enrichment fields
+            view.setFundFamily(order.getFundFamily() != null ? order.getFundFamily() : fund.getFundFamily());
+            view.setTransferAgent(order.getTransferAgent());
+            view.setTradeDate(order.getTradeDate());
+            view.setSettlementDate(order.getSettlementDate());
+            view.setContractRef(order.getContractRef());
+            view.setAllocatedShares(order.getAllocatedShares());
         }
     }
 

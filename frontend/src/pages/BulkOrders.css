@@ -79,3 +79,51 @@
   background: var(--color-primary-100);
   border-color: var(--color-primary-200);
 }
+
+.btn-simulate-ta {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  background: #0f5132;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-simulate-ta:hover { background: #0a3d21; }
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.modal-card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 340px;
+  max-width: 480px;
+  width: 90%;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+}
+.modal-card h3 { margin: 0 0 8px; font-size: 1.05rem; }
+.modal-card label { font-size: 0.85rem; color: #333; }
+.modal-card input { padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem; }
+
+.contract-success-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: #0f5132;
+  color: #fff;
+  padding: 12px 20px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  z-index: 2000;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}

@@ -19,6 +19,10 @@ import com.iiit.oms.model.Advisor;
 import com.iiit.oms.model.AdvisorClientRelationship;
 import com.iiit.oms.model.User;
 import com.iiit.oms.model.UserSession;
+import com.iiit.oms.auth.SessionStore;
+import com.iiit.oms.auth.InMemorySessionStore;
+import com.iiit.oms.repository.AuditLogRepository;
+import com.iiit.oms.idempotency.IdempotencyStore;
 import com.iiit.oms.repository.AccountRepository;
 import com.iiit.oms.repository.AdvisorClientRelationshipRepository;
 import com.iiit.oms.repository.AdvisorRepository;
@@ -53,7 +57,7 @@ import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
 
-public class OrderRestServer {
+public class OrderRestServer implements SseBroadcaster {
     private static final Logger LOGGER = Logger.getLogger(OrderRestServer.class.getName());
     private static final String PLAN_ORDERS_PATH = "/orders/plan";
     private static final String LIST_ORDERS_PATH = "/orders";
@@ -81,6 +85,8 @@ public class OrderRestServer {
     private static final String ADVISOR_ORDERS_PATH = "/advisor/orders";
     private static final String ADVISOR_ORDERS_PLAN_PATH = "/advisor/orders/plan";
     private static final String ADVISOR_DASHBOARD_PATH = "/advisor/dashboard";
+    private static final String TRANSFER_AGENT_CONTRACT_PATH = "/transfer-agent/contract";
+    private static final String ORDER_AUDIT_PATH = "/orders/audit";
 
     private final HttpServer httpServer;
     private final OrderRepository orderRepository;
@@ -91,12 +97,14 @@ public class OrderRestServer {
     private final AdvisorRepository advisorRepository;
     private final AdvisorClientRelationshipRepository advisorClientRelationshipRepository;
     private final UserRepository userRepository;
-    private final Map<String, UserSession> tokenStore = new ConcurrentHashMap<>();
+    private volatile SessionStore tokenStore;
     private final OrderStateMachine orderStateMachine;
     private final ProjectionStore projectionStore;
     private final OrderProjectionListener projectionListener;
     private final ObjectMapper objectMapper;
     private final List<OutputStream> sseClients;
+    private IdempotencyStore idempotencyStore;
+    private AuditLogRepository auditLogRepository;
 
     public OrderRestServer(int port, OrderRepository orderRepository) throws IOException {
         this(port, orderRepository, null, null, null, null, null, null, null, null, null, null);
@@ -158,6 +166,7 @@ public class OrderRestServer {
         this.projectionListener = projectionListener;
         this.objectMapper = new ObjectMapper();
         this.sseClients = new CopyOnWriteArrayList<>();
+        this.tokenStore = new InMemorySessionStore();
         this.httpServer = HttpServer.create(new InetSocketAddress(port), 0);
         this.httpServer.createContext(ADVISOR_ORDERS_PLAN_PATH, withCors(new AdvisorPlanOrdersHandler()));
         this.httpServer.createContext(ADVISOR_ORDERS_PATH, withCors(new AdvisorOrdersHandler()));
@@ -183,6 +192,8 @@ public class OrderRestServer {
         this.httpServer.createContext(AUTH_ME_PATH, withCors(new AuthMeHandler()));
         this.httpServer.createContext(AUTH_LOGOUT_PATH, withCors(new AuthLogoutHandler()));
         this.httpServer.createContext(VIEW_USERS_PATH, withCors(new ViewUsersHandler()));
+        this.httpServer.createContext(TRANSFER_AGENT_CONTRACT_PATH, withCors(new ContractCallbackHandler()));
+        this.httpServer.createContext(ORDER_AUDIT_PATH, withCors(new AuditLogHandler()));
         this.httpServer.setExecutor(Executors.newFixedThreadPool(16));
     }
 
@@ -221,6 +232,20 @@ public class OrderRestServer {
         return httpServer.getAddress().getPort();
     }
 
+    public void setIdempotencyStore(IdempotencyStore idempotencyStore) {
+        this.idempotencyStore = idempotencyStore;
+    }
+
+    public void setSessionStore(SessionStore sessionStore) {
+        if (sessionStore != null) {
+            this.tokenStore = sessionStore;
+        }
+    }
+
+    public void setAuditLogRepository(AuditLogRepository auditLogRepository) {
+        this.auditLogRepository = auditLogRepository;
+    }
+
     private final class PlanOrdersHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -232,6 +257,10 @@ public class OrderRestServer {
             try {
                 List<Order> orders = parseOrders(exchange.getRequestBody());
                 LOGGER.info("Received " + orders.size() + " orders at endpoint: " + PLAN_ORDERS_PATH);
+
+                // Read client-provided idempotency key (one per request batch)
+                String clientIdempotencyKey = exchange.getRequestHeaders().getFirst("X-Idempotency-Key");
+
                 List<String> assignedOrderIds = new ArrayList<>();
                 for (Order order : orders) {
                     // Assign orderID if not present
@@ -240,6 +269,23 @@ public class OrderRestServer {
                         order.setOrderID(uniqueId);
                         LOGGER.info("Assigned unique ID " + uniqueId + " to order");
                     }
+
+                    // Idempotency check: only use client-supplied key (X-Idempotency-Key header).
+                    // The natural-key fallback (accountID:productID:amount:side) was removed because
+                    // it blocked legitimate repeat orders for the same fund/amount combination.
+                    if (idempotencyStore != null && clientIdempotencyKey != null && !clientIdempotencyKey.isBlank()) {
+                        int idx = orders.indexOf(order);
+                        String idemKey = "req:" + clientIdempotencyKey + (orders.size() > 1 ? ":" + idx : "");
+                        boolean isNew = idempotencyStore.registerIfAbsent(idemKey, order.getOrderID(), 3600);
+                        if (!isNew) {
+                            String existingId = idempotencyStore.getOrderId(idemKey);
+                            idempotencyStore.incrementDedupHits();
+                            LOGGER.warning("Duplicate order submission detected for key=" + idemKey + " existing orderID=" + existingId);
+                            writeResponse(exchange, 409, "{\"message\":\"Duplicate order submission\",\"existingOrderID\":\"" + existingId + "\"}");
+                            return;
+                        }
+                    }
+
                     assignedOrderIds.add(order.getOrderID());
 
                     if (order.getOrderSide() == null) {
@@ -417,7 +463,8 @@ public class OrderRestServer {
 
             try {
                 List<BulkOrder> bulkedOrders = bulkOrderRepository.findAll().stream()
-                        .filter(bulkOrder -> bulkOrder.getBulkOrderStatus() == BulkOrderStatus.BULKED)
+                        .filter(bulkOrder -> bulkOrder.getBulkOrderStatus() == BulkOrderStatus.BULKED
+                                || bulkOrder.getBulkOrderStatus() == BulkOrderStatus.TRANSMITTED)
                         .collect(Collectors.toList());
 
                 int confirmedBulkOrders = 0;
@@ -437,23 +484,23 @@ public class OrderRestServer {
                         }
 
                         Order order = maybeOrder.get();
-                        if (order.getOrderStatus() != OrderStatus.BULKED) {
-                            order.setOrderStatus(OrderStatus.BULKED);
+                        if (order.getOrderStatus() != OrderStatus.BULKED
+                                && order.getOrderStatus() != OrderStatus.TRANSMITTED) {
+                            continue; // already moved on
                         }
 
-                        Order advancedOrder = orderStateMachine.process(order);
-                        orderRepository.save(advancedOrder);
+                        OrderStatus prevStatus = order.getOrderStatus();
+                        order.setOrderStatus(OrderStatus.CONFIRMED);
+                        orderRepository.save(order);
 
                         Optional<Fund> maybeFund = resolveFund(order.getProductID());
                         if (projectionListener != null && maybeFund.isPresent()) {
-                            projectionListener.onOrderStatusChanged(advancedOrder, bulkOrder, maybeFund.get());
+                            projectionListener.onOrderStatusChanged(order, bulkOrder, maybeFund.get());
                             publishViewEvent("order-updated",
-                                    toOrderEventPayload(advancedOrder, bulkOrder.getOrderID()));
+                                    toOrderEventPayload(order, bulkOrder.getOrderID()));
                         }
 
-                        if (advancedOrder.getOrderStatus() == OrderStatus.CONFIRMED) {
-                            confirmedIndividualOrders++;
-                        }
+                        confirmedIndividualOrders++;
                     }
 
                     bulkOrder.setBulkOrderStatus(BulkOrderStatus.CONFIRMED);
@@ -691,6 +738,11 @@ public class OrderRestServer {
             dashboard.put("bulkOrdersByStatus", bulkOrdersByStatus);
             dashboard.put("orders", orders);
             dashboard.put("bulkOrders", bulkOrders);
+            // Dedup counter from Redis/in-memory idempotency store
+            if (idempotencyStore != null) {
+                dashboard.put("dedupHits", idempotencyStore.getDedupHits());
+                dashboard.put("idempotencyStatus", idempotencyStore.getStatus());
+            }
 
             sendJsonResponse(exchange, 200, dashboard);
         }
@@ -774,7 +826,7 @@ public class OrderRestServer {
                                 .collect(Collectors.groupingBy(OrderView::getOrderSide, Collectors.counting()));
                         String fundName = fundOrders.stream().map(OrderView::getFundName).filter(Objects::nonNull)
                                 .findFirst().orElse("");
-                        BigDecimal nav = fundOrders.stream().map(OrderView::getNAV).filter(Objects::nonNull).findFirst()
+                        BigDecimal nav = fundOrders.stream().map(OrderView::getNav).filter(Objects::nonNull).findFirst()
                                 .orElse(null);
 
                         Map<String, Object> row = new HashMap<>();
@@ -885,7 +937,7 @@ public class OrderRestServer {
 
             try {
                 while (true) {
-                    outputStream.write(":keepalive\\n\\n".getBytes(StandardCharsets.UTF_8));
+                    outputStream.write(":keepalive\n\n".getBytes(StandardCharsets.UTF_8));
                     outputStream.flush();
                     Thread.sleep(15000);
                 }
@@ -1369,6 +1421,13 @@ public class OrderRestServer {
         } catch (JsonProcessingException ex) {
             return;
         }
+        publishViewEventRaw(eventType, data);
+    }
+
+    private void publishViewEventRaw(String eventType, String data) {
+        if (sseClients.isEmpty()) {
+            return;
+        }
         for (OutputStream client : sseClients) {
             try {
                 writeSseEvent(client, eventType, data);
@@ -1383,7 +1442,7 @@ public class OrderRestServer {
     }
 
     private void writeSseEvent(OutputStream outputStream, String eventType, String data) throws IOException {
-        String payload = "event: " + eventType + "\\n" + "data: " + data + "\\n\\n";
+        String payload = "event: " + eventType + "\n" + "data: " + data + "\n\n";
         outputStream.write(payload.getBytes(StandardCharsets.UTF_8));
         outputStream.flush();
     }
@@ -1423,4 +1482,183 @@ public class OrderRestServer {
         }
         return null;
     }
+
+    private String buildIdempotencyKey(Order order) {
+        return order.getAccountID() + ":" + order.getProductID() + ":" + order.getAmount() + ":" + order.getOrderSide();
+    }
+
+    // --- SseBroadcaster implementation ---
+    @Override
+    public void broadcastOrderUpdate(Order order, String bulkOrderID) {
+        publishViewEvent("order-updated", toOrderEventPayload(order, bulkOrderID));
+    }
+
+    @Override
+    public void broadcastBulkOrderUpdate(BulkOrder bulkOrder, java.util.List<String> mappedOrderIDs) {
+        publishViewEvent("bulk-order-updated", toBulkOrderEventPayload(bulkOrder, mappedOrderIDs));
+    }
+
+    @Override
+    public void broadcastRawEvent(String eventType, String jsonPayload) {
+        publishViewEventRaw(eventType, jsonPayload);
+    }
+
+    /**
+     * POST /transfer-agent/contract
+     * Simulates the Transfer Agent calling back with contract details (NAV + total shares).
+     * Body: { "bulkOrderId": "BLK-xxx", "nav": 47.23, "totalShares": 4447.28, "contractRef": "CTR-001" }
+     * Advances all constituent orders: TRANSMITTED/CONFIRMED → CONTRACTED → BOOKED
+     */
+    private final class ContractCallbackHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only POST is supported"));
+                return;
+            }
+            if (bulkOrderRepository == null || bulkOrderMappingRepository == null || orderStateMachine == null) {
+                sendJsonResponse(exchange, 500, Map.of("message", "Contract callback endpoint not configured"));
+                return;
+            }
+            try {
+                Map<String, Object> body = objectMapper.readValue(exchange.getRequestBody(),
+                        new TypeReference<Map<String, Object>>() {});
+                String bulkOrderId = (String) body.get("bulkOrderId");
+                if (bulkOrderId == null || bulkOrderId.isBlank()) {
+                    sendJsonResponse(exchange, 400, Map.of("message", "bulkOrderId is required"));
+                    return;
+                }
+                Object navObj = body.get("nav");
+                Object sharesObj = body.get("totalShares");
+                Object contractRefObj = body.get("contractRef");
+                if (navObj == null || sharesObj == null) {
+                    sendJsonResponse(exchange, 400, Map.of("message", "nav and totalShares are required"));
+                    return;
+                }
+                BigDecimal nav = new BigDecimal(navObj.toString());
+                BigDecimal totalShares = new BigDecimal(sharesObj.toString());
+                String contractRef = contractRefObj != null ? contractRefObj.toString()
+                        : "CTR-" + System.currentTimeMillis();
+
+                Optional<BulkOrder> maybeBulk = bulkOrderRepository.findByOrderId(bulkOrderId);
+                if (maybeBulk.isEmpty()) {
+                    sendJsonResponse(exchange, 404, Map.of("message", "Bulk order not found: " + bulkOrderId));
+                    return;
+                }
+                BulkOrder bulkOrder = maybeBulk.get();
+                if (bulkOrder.getBulkOrderStatus() != BulkOrderStatus.TRANSMITTED) {
+                    sendJsonResponse(exchange, 409, Map.of(
+                            "message", "Bulk order is not in TRANSMITTED status",
+                            "currentStatus", bulkOrder.getBulkOrderStatus().name()));
+                    return;
+                }
+
+                List<String> individualOrderIds = bulkOrderMappingRepository
+                        .findIndividualOrderIds(bulkOrderId).orElse(List.of());
+
+                BigDecimal bulkAmount = bulkOrder.getAmount();
+                int contracted = 0;
+                int booked = 0;
+
+                for (String orderId : individualOrderIds) {
+                    Optional<Order> maybeOrder = orderRepository.findByOrderId(orderId);
+                    if (maybeOrder.isEmpty()) continue;
+                    Order order = maybeOrder.get();
+
+                    // Proportional share allocation: clientShares = (clientAmount / bulkAmount) * totalShares
+                    BigDecimal allocatedShares = BigDecimal.ZERO;
+                    if (bulkAmount != null && bulkAmount.compareTo(BigDecimal.ZERO) > 0 && order.getAmount() != null) {
+                        allocatedShares = order.getAmount()
+                                .divide(bulkAmount, 10, java.math.RoundingMode.HALF_UP)
+                                .multiply(totalShares)
+                                .setScale(8, java.math.RoundingMode.HALF_UP);
+                    }
+
+                    // CONTRACTED
+                    orderStateMachine.advanceToContracted(order, contractRef, nav, allocatedShares);
+                    orderRepository.save(order);
+                    contracted++;
+
+                    // BOOKED
+                    orderStateMachine.advanceToBooked(order);
+                    orderRepository.save(order);
+                    booked++;
+
+                    Optional<Fund> maybeFund = resolveFund(order.getProductID());
+                    if (projectionListener != null && maybeFund.isPresent()) {
+                        projectionListener.onOrderStatusChanged(order, bulkOrder, maybeFund.get());
+                        publishViewEvent("order-updated", toOrderEventPayload(order, bulkOrderId));
+                    }
+                }
+
+                // Update bulk order → CONTRACTED → BOOKED
+                bulkOrder.setContractRef(contractRef);
+                bulkOrder.setBulkNav(nav);
+                bulkOrder.setBulkOrderStatus(BulkOrderStatus.CONTRACTED);
+                bulkOrderRepository.save(bulkOrder);
+                bulkOrder.setBulkOrderStatus(BulkOrderStatus.BOOKED);
+                bulkOrderRepository.save(bulkOrder);
+
+                Optional<Fund> maybeFund = resolveFund(bulkOrder.getProductID());
+                if (projectionListener != null && maybeFund.isPresent()) {
+                    projectionListener.onBulkOrderStatusChanged(bulkOrder, maybeFund.get(), individualOrderIds);
+                    publishViewEvent("bulk-order-updated", toBulkOrderEventPayload(bulkOrder, individualOrderIds));
+                }
+
+                sendJsonResponse(exchange, 200, Map.of(
+                        "message", "Contract callback processed",
+                        "bulkOrderId", bulkOrderId,
+                        "contractRef", contractRef,
+                        "nav", nav,
+                        "totalShares", totalShares,
+                        "contractedOrders", contracted,
+                        "bookedOrders", booked
+                ));
+            } catch (Exception ex) {
+                LOGGER.severe("Contract callback failed: " + ex.getMessage());
+                sendJsonResponse(exchange, 500, Map.of("message", "Failed to process contract callback: " + ex.getMessage()));
+            }
+        }
+    }
+
+    /**
+     * GET /orders/audit?orderID=xxx
+     * Returns the full audit trail for a specific order.
+     */
+    private final class AuditLogHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only GET is supported"));
+                return;
+            }
+            if (auditLogRepository == null) {
+                sendJsonResponse(exchange, 503, Map.of("message", "Audit log not configured"));
+                return;
+            }
+            String orderID = getQueryParam(exchange.getRequestURI().getQuery(), "orderID");
+            if (orderID == null || orderID.isBlank()) {
+                sendJsonResponse(exchange, 400, Map.of("message", "orderID query parameter is required"));
+                return;
+            }
+            try {
+                List<com.iiit.oms.model.AuditLogEntry> entries = auditLogRepository.findByOrderId(orderID);
+                List<Map<String, Object>> response = entries.stream().map(e -> {
+                    Map<String, Object> row = new HashMap<>();
+                    row.put("orderID", e.getOrderID());
+                    row.put("fromStatus", e.getFromStatus());
+                    row.put("toStatus", e.getToStatus());
+                    row.put("occurredAt", e.getOccurredAt().toString());
+                    row.put("actor", e.getActor());
+                    row.put("details", e.getDetails());
+                    return row;
+                }).collect(Collectors.toList());
+                sendJsonResponse(exchange, 200, response);
+            } catch (Exception ex) {
+                LOGGER.severe("Failed to fetch audit log for order " + orderID + ": " + ex.getMessage());
+                sendJsonResponse(exchange, 500, Map.of("message", "Failed to fetch audit log"));
+            }
+        }
+    }
 }
+

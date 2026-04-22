@@ -44,7 +44,7 @@ function AppContent() {
           <Route path="/" element={<ProtectedRoute><Home sseEventCount={eventCount} /></ProtectedRoute>} />
           <Route path="/orders" element={<ProtectedRoute><Orders sseEventCount={eventCount} /></ProtectedRoute>} />
           <Route path="/orders/new" element={<ProtectedRoute><PlaceOrder /></ProtectedRoute>} />
-          <Route path="/orders/:orderId" element={<ProtectedRoute><OrderDetail /></ProtectedRoute>} />
+          <Route path="/orders/:orderId" element={<ProtectedRoute><OrderDetail sseEventCount={eventCount} /></ProtectedRoute>} />
           <Route path="/funds" element={<ProtectedRoute><Funds /></ProtectedRoute>} />
           <Route path="/funds/:fundId" element={<ProtectedRoute><FundDetail /></ProtectedRoute>} />
           <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
@@ -52,7 +52,7 @@ function AppContent() {
           {/* Advisor routes */}
           <Route path="/advisor" element={<ProtectedRoute><AdvisorHome sseEventCount={eventCount} advisorId={advisorId} /></ProtectedRoute>} />
           <Route path="/advisor/clients" element={<ProtectedRoute><AdvisorClients advisorId={advisorId} sseEventCount={eventCount} /></ProtectedRoute>} />
-          <Route path="/advisor/clients/:accountId" element={<ProtectedRoute><AdvisorClientDetail advisorId={advisorId} /></ProtectedRoute>} />
+          <Route path="/advisor/clients/:accountId" element={<ProtectedRoute><AdvisorClientDetail advisorId={advisorId} sseEventCount={eventCount} /></ProtectedRoute>} />
           <Route path="/advisor/orders/new" element={<ProtectedRoute><AdvisorBasketOrder advisorId={advisorId} /></ProtectedRoute>} />
           <Route path="/advisor/orders/review" element={<ProtectedRoute><AdvisorBasketReview /></ProtectedRoute>} />
           <Route path="/advisor/activity" element={<ProtectedRoute><AdvisorActivity advisorId={advisorId} sseEventCount={eventCount} /></ProtectedRoute>} />

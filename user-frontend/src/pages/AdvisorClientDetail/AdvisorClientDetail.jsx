@@ -22,13 +22,13 @@ function BackIcon() {
   return (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>)
 }
 
-export default function AdvisorClientDetail({ advisorId }) {
+export default function AdvisorClientDetail({ advisorId, sseEventCount = 0 }) {
   const { accountId } = useParams()
   const navigate = useNavigate()
   const id = advisorId || ADVISOR_CONFIG.DEFAULT_ADVISOR_ID
 
   const { data: clients } = useFetch(() => getAdvisorClients(id), [id])
-  const { data: orders, loading } = useFetch(() => getAdvisorClientOrders(accountId), [accountId])
+  const { data: orders, loading } = useFetch(() => getAdvisorClientOrders(accountId), [accountId, sseEventCount])
 
   const clientData = useMemo(() => clients?.find(c => c.accountID === accountId), [clients, accountId])
   const orderList = orders || []

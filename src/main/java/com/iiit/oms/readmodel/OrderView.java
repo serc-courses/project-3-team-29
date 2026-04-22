@@ -17,6 +17,14 @@ public class OrderView {
     private BigDecimal nav;
     private String orderStatus;
     private String bulkOrderID;
+    // Enrichment fields
+    private String fundFamily;
+    private String transferAgent;
+    private String tradeDate;
+    private String settlementDate;
+    // Contract fields
+    private String contractRef;
+    private BigDecimal allocatedShares;
 
     public OrderView() {
     }
@@ -58,14 +66,32 @@ public class OrderView {
     public BigDecimal getQuantity() { return quantity; }
     public void setQuantity(BigDecimal quantity) { this.quantity = quantity; }
 
-    public BigDecimal getNAV() { return nav; }
-    public void setNAV(BigDecimal nav) { this.nav = nav; }
+    public BigDecimal getNav() { return nav; }
+    public void setNav(BigDecimal nav) { this.nav = nav; }
 
     public String getOrderStatus() { return orderStatus; }
     public void setOrderStatus(String orderStatus) { this.orderStatus = orderStatus; }
 
     public String getBulkOrderID() { return bulkOrderID; }
     public void setBulkOrderID(String bulkOrderID) { this.bulkOrderID = bulkOrderID; }
+
+    public String getFundFamily() { return fundFamily; }
+    public void setFundFamily(String fundFamily) { this.fundFamily = fundFamily; }
+
+    public String getTransferAgent() { return transferAgent; }
+    public void setTransferAgent(String transferAgent) { this.transferAgent = transferAgent; }
+
+    public String getTradeDate() { return tradeDate; }
+    public void setTradeDate(String tradeDate) { this.tradeDate = tradeDate; }
+
+    public String getSettlementDate() { return settlementDate; }
+    public void setSettlementDate(String settlementDate) { this.settlementDate = settlementDate; }
+
+    public String getContractRef() { return contractRef; }
+    public void setContractRef(String contractRef) { this.contractRef = contractRef; }
+
+    public BigDecimal getAllocatedShares() { return allocatedShares; }
+    public void setAllocatedShares(BigDecimal allocatedShares) { this.allocatedShares = allocatedShares; }
 
     @Override
     public String toString() {
@@ -80,6 +106,12 @@ public class OrderView {
                 ", nav=" + nav +
                 ", orderStatus='" + orderStatus + '\'' +
                 ", bulkOrderID='" + bulkOrderID + '\'' +
+                ", fundFamily='" + fundFamily + '\'' +
+                ", transferAgent='" + transferAgent + '\'' +
+                ", tradeDate='" + tradeDate + '\'' +
+                ", settlementDate='" + settlementDate + '\'' +
+                ", contractRef='" + contractRef + '\'' +
+                ", allocatedShares=" + allocatedShares +
                 '}';
     }
 }

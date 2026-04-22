@@ -10,6 +10,10 @@ public class BulkOrder {
     private BigDecimal quantity;
     private BigDecimal amount;
     private String accountID;
+    private String transferAgent;
+    private String transmissionRef;
+    private String contractRef;
+    private BigDecimal bulkNav;
 
     public BulkOrder() {
     }
@@ -84,4 +88,16 @@ public class BulkOrder {
     public void setAccountID(String accountID) {
         this.accountID = accountID;
     }
+
+    public String getTransferAgent() { return transferAgent; }
+    public void setTransferAgent(String transferAgent) { this.transferAgent = transferAgent; }
+
+    public String getTransmissionRef() { return transmissionRef; }
+    public void setTransmissionRef(String transmissionRef) { this.transmissionRef = transmissionRef; }
+
+    public String getContractRef() { return contractRef; }
+    public void setContractRef(String contractRef) { this.contractRef = contractRef; }
+
+    public BigDecimal getBulkNav() { return bulkNav; }
+    public void setBulkNav(BigDecimal bulkNav) { this.bulkNav = bulkNav; }
 }

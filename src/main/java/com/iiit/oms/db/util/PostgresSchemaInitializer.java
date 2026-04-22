@@ -61,18 +61,55 @@ public final class PostgresSchemaInitializer {
         // Backward-compatible schema evolution for existing databases.
         statements.add("ALTER TABLE orders ADD COLUMN IF NOT EXISTS error_description TEXT");
         statements.add("ALTER TABLE orders ALTER COLUMN quantity DROP NOT NULL");
+        statements.add("ALTER TABLE orders ADD COLUMN IF NOT EXISTS transfer_agent VARCHAR(16)");
+        statements.add("ALTER TABLE orders ADD COLUMN IF NOT EXISTS fund_family VARCHAR(255)");
+        statements.add("ALTER TABLE orders ADD COLUMN IF NOT EXISTS trade_date VARCHAR(16)");
+        statements.add("ALTER TABLE orders ADD COLUMN IF NOT EXISTS settlement_date VARCHAR(16)");
+        statements.add("ALTER TABLE orders ADD COLUMN IF NOT EXISTS contract_ref VARCHAR(128)");
+        statements.add("ALTER TABLE orders ADD COLUMN IF NOT EXISTS nav NUMERIC(20, 8)");
+        statements.add("ALTER TABLE orders ADD COLUMN IF NOT EXISTS allocated_shares NUMERIC(20, 8)");
+
+        statements.add("ALTER TABLE funds ADD COLUMN IF NOT EXISTS transfer_agent VARCHAR(16) NOT NULL DEFAULT 'NSCC'");
+        statements.add("ALTER TABLE funds ADD COLUMN IF NOT EXISTS is_offshore BOOLEAN NOT NULL DEFAULT FALSE");
 
         statements.add("CREATE TABLE IF NOT EXISTS bulk_orders ("
                 + "order_id VARCHAR(64) PRIMARY KEY,"
                 + "product_id VARCHAR(64) NOT NULL,"
                 + "order_side VARCHAR(16) NOT NULL,"
-            + "bulk_order_status VARCHAR(32) NOT NULL,"
+                + "bulk_order_status VARCHAR(32) NOT NULL DEFAULT 'BULKED',"
                 + "quantity NUMERIC(20, 8) NOT NULL,"
                 + "amount NUMERIC(20, 8) NOT NULL,"
-                + "account_id VARCHAR(64) NOT NULL"
+                + "account_id VARCHAR(64) NOT NULL,"
+                + "transfer_agent VARCHAR(16),"
+                + "transmission_ref VARCHAR(128),"
+                + "contract_ref VARCHAR(128),"
+                + "bulk_nav NUMERIC(20, 8)"
                 + ")");
 
         statements.add("ALTER TABLE bulk_orders ADD COLUMN IF NOT EXISTS bulk_order_status VARCHAR(32) NOT NULL DEFAULT 'BULKED'");
+        statements.add("ALTER TABLE bulk_orders ADD COLUMN IF NOT EXISTS transfer_agent VARCHAR(16)");
+        statements.add("ALTER TABLE bulk_orders ADD COLUMN IF NOT EXISTS transmission_ref VARCHAR(128)");
+        statements.add("ALTER TABLE bulk_orders ADD COLUMN IF NOT EXISTS contract_ref VARCHAR(128)");
+        statements.add("ALTER TABLE bulk_orders ADD COLUMN IF NOT EXISTS bulk_nav NUMERIC(20, 8)");
+
+        statements.add("CREATE TABLE IF NOT EXISTS order_audit_log ("
+                + "id BIGSERIAL PRIMARY KEY,"
+                + "order_id VARCHAR(64) NOT NULL,"
+                + "from_status VARCHAR(32),"
+                + "to_status VARCHAR(32) NOT NULL,"
+                + "occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+                + "actor VARCHAR(100),"
+                + "details TEXT"
+                + ")");
+
+        statements.add("CREATE TABLE IF NOT EXISTS transmission_log ("
+                + "id BIGSERIAL PRIMARY KEY,"
+                + "bulk_order_id VARCHAR(64) NOT NULL,"
+                + "transfer_agent VARCHAR(16) NOT NULL,"
+                + "transmission_ref VARCHAR(128) NOT NULL,"
+                + "transmitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+                + "status VARCHAR(32) NOT NULL DEFAULT 'SENT'"
+                + ")");
 
         statements.add("CREATE TABLE IF NOT EXISTS bulk_order_mappings ("
                 + "bulk_order_id VARCHAR(64) NOT NULL,"
@@ -99,13 +136,16 @@ public final class PostgresSchemaInitializer {
 
     private static List<String> cleanDataStatements() {
         List<String> statements = new ArrayList<>();
-        statements.add("TRUNCATE TABLE advisor_client_relationships");
-        statements.add("TRUNCATE TABLE advisors");
-        statements.add("TRUNCATE TABLE bulk_order_mappings");
-        statements.add("TRUNCATE TABLE bulk_orders");
-        statements.add("TRUNCATE TABLE orders");
-        statements.add("TRUNCATE TABLE funds");
-        statements.add("TRUNCATE TABLE accounts");
+        // Use CASCADE to handle any FK dependencies safely
+        statements.add("TRUNCATE TABLE transmission_log CASCADE");
+        statements.add("TRUNCATE TABLE order_audit_log CASCADE");
+        statements.add("TRUNCATE TABLE bulk_order_mappings CASCADE");
+        statements.add("TRUNCATE TABLE bulk_orders CASCADE");
+        statements.add("TRUNCATE TABLE orders CASCADE");
+        statements.add("TRUNCATE TABLE funds CASCADE");
+        statements.add("TRUNCATE TABLE advisor_client_relationships CASCADE");
+        statements.add("TRUNCATE TABLE advisors CASCADE");
+        statements.add("TRUNCATE TABLE accounts CASCADE");
         return statements;
     }
 }

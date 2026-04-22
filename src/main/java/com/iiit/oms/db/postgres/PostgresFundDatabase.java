@@ -19,14 +19,16 @@ public class PostgresFundDatabase {
     }
 
     public void upsert(Fund fund) {
-        String sql = "INSERT INTO funds(fund_id, fund_name, fund_family, nav) VALUES (?, ?, ?, ?) "
-                + "ON CONFLICT (fund_id) DO UPDATE SET fund_name = EXCLUDED.fund_name, fund_family = EXCLUDED.fund_family, nav = EXCLUDED.nav";
+        String sql = "INSERT INTO funds(fund_id, fund_name, fund_family, nav, transfer_agent, is_offshore) VALUES (?, ?, ?, ?, ?, ?) "
+                + "ON CONFLICT (fund_id) DO UPDATE SET fund_name = EXCLUDED.fund_name, fund_family = EXCLUDED.fund_family, nav = EXCLUDED.nav, transfer_agent = EXCLUDED.transfer_agent, is_offshore = EXCLUDED.is_offshore";
         try (Connection connection = connectionFactory.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, fund.getFundID());
             statement.setString(2, fund.getFundName());
             statement.setString(3, fund.getFundFamily());
             statement.setBigDecimal(4, fund.getNAV());
+            statement.setString(5, fund.getTransferAgent());
+            statement.setBoolean(6, fund.isOffshore());
             statement.executeUpdate();
         } catch (SQLException ex) {
             throw new RuntimeException("Failed to upsert fund " + fund.getFundID(), ex);
@@ -34,7 +36,7 @@ public class PostgresFundDatabase {
     }
 
     public Optional<Fund> getById(String fundID) {
-        String sql = "SELECT fund_id, fund_name, fund_family, nav FROM funds WHERE fund_id = ?";
+        String sql = "SELECT fund_id, fund_name, fund_family, nav, transfer_agent, is_offshore FROM funds WHERE fund_id = ?";
         try (Connection connection = connectionFactory.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, fundID);
@@ -42,7 +44,7 @@ public class PostgresFundDatabase {
                 if (!rs.next()) {
                     return Optional.empty();
                 }
-                return Optional.of(new Fund(rs.getString("fund_id"), rs.getString("fund_name"), rs.getString("fund_family"), rs.getBigDecimal("nav")));
+                return Optional.of(mapRow(rs));
             }
         } catch (SQLException ex) {
             throw new RuntimeException("Failed to find fund " + fundID, ex);
@@ -50,13 +52,13 @@ public class PostgresFundDatabase {
     }
 
     public List<Fund> getAll() {
-        String sql = "SELECT fund_id, fund_name, fund_family, nav FROM funds";
+        String sql = "SELECT fund_id, fund_name, fund_family, nav, transfer_agent, is_offshore FROM funds";
         List<Fund> results = new ArrayList<>();
         try (Connection connection = connectionFactory.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql);
              ResultSet rs = statement.executeQuery()) {
             while (rs.next()) {
-                results.add(new Fund(rs.getString("fund_id"), rs.getString("fund_name"), rs.getString("fund_family"), rs.getBigDecimal("nav")));
+                results.add(mapRow(rs));
             }
             return results;
         } catch (SQLException ex) {
@@ -96,5 +98,13 @@ public class PostgresFundDatabase {
         } catch (SQLException ex) {
             throw new RuntimeException("Failed to clear funds", ex);
         }
+    }
+
+    private Fund mapRow(ResultSet rs) throws SQLException {
+        Fund fund = new Fund(rs.getString("fund_id"), rs.getString("fund_name"), rs.getString("fund_family"), rs.getBigDecimal("nav"));
+        fund.setOffshore(rs.getBoolean("is_offshore"));
+        String ta = rs.getString("transfer_agent");
+        if (ta != null) fund.setTransferAgent(ta);
+        return fund;
     }
 }

@@ -6,6 +6,7 @@ public enum OrderStatus {
     ENRICHED,
     PLACED,
     BULKED,
+    TRANSMITTED,
     CONFIRMED,
     CONTRACTED,
     BOOKED,
