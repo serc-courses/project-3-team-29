@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import './NewOrder.css'
 import { planOrders } from '../api/ordersApi'
 import { getFundAggregates, getAccountAggregates } from '../api/aggregatesApi'
+import { getFunds } from '../api/fundApi'
+import {getUsers} from '../api/usersApi'
 import { formatCurrency } from '../utils/formatters'
 import { ORDER_SIDE } from '../constants/orderStatus'
 import { ROUTES } from '../constants/routes'
@@ -40,11 +42,11 @@ export default function NewOrder() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    getFundAggregates()
+    getFunds()
       .then((data) => setFunds(data.length > 0 ? data : FALLBACK_FUNDS))
       .catch(() => setFunds(FALLBACK_FUNDS))
 
-    getAccountAggregates()
+    getUsers()
       .then((data) =>
         setAccounts(
           data.length > 0 ? data.map((a) => a.accountID) : FALLBACK_ACCOUNTS

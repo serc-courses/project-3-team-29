@@ -13,6 +13,7 @@ export const NAV_ITEMS = [
   { label: 'Orders', path: ROUTES.ORDERS, icon: 'orders' },
   { label: 'Bulk Orders', path: ROUTES.BULK_ORDERS, icon: 'bulk' },
   { label: 'Funds', path: ROUTES.FUNDS, icon: 'funds' },
-  { label: 'Accounts', path: ROUTES.ACCOUNTS, icon: 'accounts' },
+  { label: 'Aggregate Accounts', path: ROUTES.ACCOUNTS, icon: 'accounts' },
   { label: 'Users', path: ROUTES.USERS, icon: 'users' },
+  {label:'Aggregate Funds', path:ROUTES.AGGREGATE_FUNDS, icon:'funds'}
 ];

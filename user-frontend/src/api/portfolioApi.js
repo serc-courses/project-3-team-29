@@ -1,7 +1,7 @@
 import { api } from './client'
 
 export function getFunds() {
-  return api.get('/view/aggregates/funds')
+  return api.get('/funds')
 }
 
 export function getAccounts() {

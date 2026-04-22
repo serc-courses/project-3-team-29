@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import './Funds.css'
 import '../components/FilterBar/FilterBar.css'
-import { getFundAggregates } from '../api/aggregatesApi'
+import { getFunds } from '../api/fundApi'
 import { formatCurrency, formatQuantity } from '../utils/formatters'
 
 export default function Funds() {
@@ -13,7 +13,7 @@ export default function Funds() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    getFundAggregates()
+    getFunds()
       .then(setFunds)
       .catch((err) => setError(err.message || 'Failed to load funds'))
       .finally(() => setLoading(false))
@@ -23,7 +23,9 @@ export default function Funds() {
     if (!search) return funds
     const q = search.toLowerCase()
     return funds.filter(
-      (f) => f.fundName?.toLowerCase().includes(q) || f.fundID?.toLowerCase().includes(q)
+      (f) =>
+        f.fundName?.toLowerCase().includes(q) ||
+        f.fundID?.toLowerCase().includes(q)
     )
   }, [funds, search])
 
@@ -43,10 +45,7 @@ export default function Funds() {
       <div className="funds-search">
         <div className="filter-bar-search">
           <span className="filter-bar-search-icon">
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
-              <circle cx="5.5" cy="5.5" r="4" stroke="currentColor" strokeWidth="1.4"/>
-              <line x1="8.5" y1="8.5" x2="12" y2="12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-            </svg>
+            🔍
           </span>
           <input
             type="text"
@@ -61,39 +60,62 @@ export default function Funds() {
         <div className="funds-empty">No fund data available yet</div>
       ) : (
         <div className="funds-grid">
-          {filtered.map((fund) => (
-            <div
-              key={fund.fundID}
-              className="fund-card"
-              onClick={() => navigate(`/orders?fundID=${fund.fundID}`)}
-            >
-              <div className="fund-card-id">{fund.fundID}</div>
-              <div className="fund-card-name">{fund.fundName}</div>
-              <div className="fund-card-nav">{formatCurrency(fund.nav)}</div>
-              <div className="fund-card-divider" />
-              <div className="fund-card-stats">
-                <div className="fund-stat-row">
-                  <span className="fund-stat-label">Orders</span>
-                  <span className="fund-stat-value">{fund.orderCount}</span>
+          {filtered.map((fund) => {
+            // SAFE DEFAULTS (important)
+            const orderCount = fund.orderCount ?? 0
+            const totalAmount = fund.totalAmount ?? 0
+            const totalQuantity = fund.totalQuantity ?? 0
+            const buyCount = fund.orderSides?.BUY ?? 0
+            const sellCount = fund.orderSides?.SELL ?? 0
+
+            return (
+              <div
+                key={fund.fundID}
+                className="fund-card"
+                onClick={() => navigate(`/orders?fundID=${fund.fundID}`)}
+              >
+                <div className="fund-card-id">{fund.fundID}</div>
+                <div className='fund-family'>{fund.fundFamily}</div>
+                <div className="fund-card-name">{fund.fundName}</div>
+
+                {/* NAV always exists */}
+                <div className="fund-card-nav">
+                  {formatCurrency(fund.nav ?? 0)}
                 </div>
-                <div className="fund-stat-row">
-                  <span className="fund-stat-label">Total Amount</span>
-                  <span className="fund-stat-value">{formatCurrency(fund.totalAmount)}</span>
-                </div>
-                <div className="fund-stat-row">
-                  <span className="fund-stat-label">Buy / Sell</span>
-                  <div className="fund-side-badges">
-                    <span className="fund-side-badge buy">B {fund.orderSides?.BUY ?? 0}</span>
-                    <span className="fund-side-badge sell">S {fund.orderSides?.SELL ?? 0}</span>
-                  </div>
-                </div>
-                <div className="fund-stat-row">
-                  <span className="fund-stat-label">Total Qty</span>
-                  <span className="fund-stat-value">{formatQuantity(fund.totalQuantity)}</span>
+
+                <div className="fund-card-divider" />
+
+                <div className="fund-card-stats">
+                  {/* <div className="fund-stat-row">
+                    <span className="fund-stat-label">Orders</span>
+                    <span className="fund-stat-value">{orderCount}</span>
+                  </div> */}
+
+                  {/* <div className="fund-stat-row">
+                    <span className="fund-stat-label">Total Amount</span>
+                    <span className="fund-stat-value">
+                      {formatCurrency(totalAmount)}
+                    </span>
+                  </div> */}
+
+                  {/* <div className="fund-stat-row">
+                    <span className="fund-stat-label">Buy / Sell</span>
+                    <div className="fund-side-badges">
+                      <span className="fund-side-badge buy">B {buyCount}</span>
+                      <span className="fund-side-badge sell">S {sellCount}</span>
+                    </div>
+                  </div> */}
+
+                  {/* <div className="fund-stat-row">
+                    <span className="fund-stat-label">Total Qty</span>
+                    <span className="fund-stat-value">
+                      {formatQuantity(totalQuantity)}
+                    </span>
+                  </div> */}
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>

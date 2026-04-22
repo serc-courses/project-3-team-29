@@ -1,0 +1,102 @@
+import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
+import './Funds.css'
+import '../components/FilterBar/FilterBar.css'
+import { getFundAggregates } from '../api/aggregatesApi'
+import { formatCurrency, formatQuantity } from '../utils/formatters'
+
+export default function Funds() {
+  const [funds, setFunds] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [search, setSearch] = useState('')
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    getFundAggregates()
+      .then(setFunds)
+      .catch((err) => setError(err.message || 'Failed to load funds'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const filtered = useMemo(() => {
+    if (!search) return funds
+    const q = search.toLowerCase()
+    return funds.filter(
+      (f) => f.fundName?.toLowerCase().includes(q) || f.fundID?.toLowerCase().includes(q)
+    )
+  }, [funds, search])
+
+  if (loading) {
+    return (
+      <div className="funds-loading">
+        <span className="spinner" />
+        Loading funds...
+      </div>
+    )
+  }
+
+  if (error) return <div className="funds-error">{error}</div>
+
+  return (
+    <div className="funds-page">
+      <div className="funds-search">
+        <div className="filter-bar-search">
+          <span className="filter-bar-search-icon">
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+              <circle cx="5.5" cy="5.5" r="4" stroke="currentColor" strokeWidth="1.4" />
+              <line x1="8.5" y1="8.5" x2="12" y2="12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+          </span>
+          <input
+            type="text"
+            placeholder="Search by fund name or ID..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="funds-empty">No fund data available yet</div>
+      ) : (
+        <div className="funds-grid">
+          {filtered.map((fund) => (
+            <div
+              key={fund.fundID}
+              className="fund-card"
+              onClick={() => navigate(`/orders?fundID=${fund.fundID}`)}
+            >
+              <div className="fund-card-id">{fund.fundID}</div>
+              <div className="fund-card-name">{fund.fundName}</div>
+              <div className="fund-card-nav">{formatCurrency(fund.nav)}</div>
+              <div className="fund-card-divider" />
+              <div className="fund-card-stats">
+                <div className="fund-stat-row">
+                  <span className="fund-stat-label">Orders</span>
+                  <span className="fund-stat-value">{fund.orderCount}</span>
+                </div>
+                <div className="fund-stat-row">
+                  <span className="fund-stat-label">Total Amount</span>
+                  <span className="fund-stat-value">{formatCurrency(fund.totalAmount)}</span>
+                </div>
+                <div className="fund-stat-row">
+                  <span className="fund-stat-label">Buy / Sell</span>
+                  <div className="fund-side-badges">
+                    <span className="fund-side-badge buy">B {fund.orderSides?.BUY ?? 0}</span>
+                    <span className="fund-side-badge sell">S {fund.orderSides?.SELL ?? 0}</span>
+                  </div>
+                </div>
+                <div className="fund-stat-row">
+                  <span className="fund-stat-label">Total Qty</span>
+                  <span className="fund-stat-value">{formatQuantity(fund.totalQuantity)}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+

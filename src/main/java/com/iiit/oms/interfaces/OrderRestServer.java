@@ -68,6 +68,7 @@ public class OrderRestServer {
     private static final String VIEW_REPLAY_PATH = "/view/replay";
     private static final String VIEW_STREAM_PATH = "/view/stream";
     private static final String VIEW_UI_PATH = "/view/ui";
+    private static final String FUNDS_PATH = "/funds";
     private static final String ACCOUNTS_PATH = "/accounts";
     private static final String AUTH_LOGIN_PATH = "/auth/login";
     private static final String AUTH_ME_PATH = "/auth/me";
@@ -102,45 +103,48 @@ public class OrderRestServer {
     }
 
     public OrderRestServer(int port,
-                           OrderRepository orderRepository,
-                           BulkOrderRepository bulkOrderRepository,
-                           BulkOrderMappingRepository bulkOrderMappingRepository,
-                           OrderStateMachine orderStateMachine) throws IOException {
-        this(port, orderRepository, bulkOrderRepository, bulkOrderMappingRepository, null, orderStateMachine, null, null, null, null, null, null);
+            OrderRepository orderRepository,
+            BulkOrderRepository bulkOrderRepository,
+            BulkOrderMappingRepository bulkOrderMappingRepository,
+            OrderStateMachine orderStateMachine) throws IOException {
+        this(port, orderRepository, bulkOrderRepository, bulkOrderMappingRepository, null, orderStateMachine, null,
+                null, null, null, null, null);
     }
 
     public OrderRestServer(int port,
-                           OrderRepository orderRepository,
-                           BulkOrderRepository bulkOrderRepository,
-                           BulkOrderMappingRepository bulkOrderMappingRepository,
-                           FundRepository fundRepository,
-                           OrderStateMachine orderStateMachine) throws IOException {
-        this(port, orderRepository, bulkOrderRepository, bulkOrderMappingRepository, fundRepository, orderStateMachine, null, null, null, null, null, null);
+            OrderRepository orderRepository,
+            BulkOrderRepository bulkOrderRepository,
+            BulkOrderMappingRepository bulkOrderMappingRepository,
+            FundRepository fundRepository,
+            OrderStateMachine orderStateMachine) throws IOException {
+        this(port, orderRepository, bulkOrderRepository, bulkOrderMappingRepository, fundRepository, orderStateMachine,
+                null, null, null, null, null, null);
     }
 
     public OrderRestServer(int port,
-                           OrderRepository orderRepository,
-                           BulkOrderRepository bulkOrderRepository,
-                           BulkOrderMappingRepository bulkOrderMappingRepository,
-                           FundRepository fundRepository,
-                           OrderStateMachine orderStateMachine,
-                           ProjectionStore projectionStore,
-                           OrderProjectionListener projectionListener) throws IOException {
-        this(port, orderRepository, bulkOrderRepository, bulkOrderMappingRepository, fundRepository, orderStateMachine, projectionStore, projectionListener, null, null, null, null);
+            OrderRepository orderRepository,
+            BulkOrderRepository bulkOrderRepository,
+            BulkOrderMappingRepository bulkOrderMappingRepository,
+            FundRepository fundRepository,
+            OrderStateMachine orderStateMachine,
+            ProjectionStore projectionStore,
+            OrderProjectionListener projectionListener) throws IOException {
+        this(port, orderRepository, bulkOrderRepository, bulkOrderMappingRepository, fundRepository, orderStateMachine,
+                projectionStore, projectionListener, null, null, null, null);
     }
 
     public OrderRestServer(int port,
-                           OrderRepository orderRepository,
-                           BulkOrderRepository bulkOrderRepository,
-                           BulkOrderMappingRepository bulkOrderMappingRepository,
-                           FundRepository fundRepository,
-                           OrderStateMachine orderStateMachine,
-                           ProjectionStore projectionStore,
-                           OrderProjectionListener projectionListener,
-                           AccountRepository accountRepository,
-                           AdvisorRepository advisorRepository,
-                           AdvisorClientRelationshipRepository advisorClientRelationshipRepository,
-                           UserRepository userRepository) throws IOException {
+            OrderRepository orderRepository,
+            BulkOrderRepository bulkOrderRepository,
+            BulkOrderMappingRepository bulkOrderMappingRepository,
+            FundRepository fundRepository,
+            OrderStateMachine orderStateMachine,
+            ProjectionStore projectionStore,
+            OrderProjectionListener projectionListener,
+            AccountRepository accountRepository,
+            AdvisorRepository advisorRepository,
+            AdvisorClientRelationshipRepository advisorClientRelationshipRepository,
+            UserRepository userRepository) throws IOException {
         this.orderRepository = Objects.requireNonNull(orderRepository, "orderRepository must not be null");
         this.bulkOrderRepository = bulkOrderRepository;
         this.bulkOrderMappingRepository = bulkOrderMappingRepository;
@@ -173,6 +177,7 @@ public class OrderRestServer {
         this.httpServer.createContext(VIEW_REPLAY_PATH, withCors(new ViewReplayHandler()));
         this.httpServer.createContext(VIEW_STREAM_PATH, withCors(new ViewStreamHandler()));
         this.httpServer.createContext(VIEW_UI_PATH, withCors(new ViewUiHandler()));
+        this.httpServer.createContext(FUNDS_PATH, withCors(new ListFundsHandler()));
         this.httpServer.createContext(ACCOUNTS_PATH, withCors(new ListAccountsHandler()));
         this.httpServer.createContext(AUTH_LOGIN_PATH, withCors(new AuthLoginHandler()));
         this.httpServer.createContext(AUTH_ME_PATH, withCors(new AuthMeHandler()));
@@ -236,7 +241,7 @@ public class OrderRestServer {
                         LOGGER.info("Assigned unique ID " + uniqueId + " to order");
                     }
                     assignedOrderIds.add(order.getOrderID());
-                    
+
                     if (order.getOrderSide() == null) {
                         order.setOrderSide(OrderSide.BUY);
                     }
@@ -255,10 +260,9 @@ public class OrderRestServer {
 
                 LOGGER.info("Successfully planned " + orders.size() + " orders");
                 Map<String, Object> response = Map.of(
-                    "message", "Orders planned",
-                    "count", orders.size(),
-                    "orderIDs", assignedOrderIds
-                );
+                        "message", "Orders planned",
+                        "count", orders.size(),
+                        "orderIDs", assignedOrderIds);
                 writeResponse(exchange, 201, objectMapper.writeValueAsString(response));
             } catch (JsonProcessingException ex) {
                 writeResponse(exchange, 400, "{\"message\":\"Invalid order payload\"}");
@@ -311,6 +315,38 @@ public class OrderRestServer {
         }
     }
 
+    private final class ListFundsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                writeResponse(exchange, 405, "{\"message\":\"Only GET is supported\"}");
+                return;
+            }
+
+            try {
+                if (fundRepository == null) {
+                    writeResponse(exchange, 500, "{\"message\":\"Fund repository not configured\"}");
+                    return;
+                }
+                List<Fund> funds = fundRepository.findAll();
+                LOGGER.info("Listing " + funds.size() + " funds from repository");
+                String jsonResponse = objectMapper.writeValueAsString(funds);
+                writeResponse(exchange, 200, jsonResponse);
+            } catch (RuntimeException ex) {
+                LOGGER.severe("Failed to retrieve funds: " + ex.getMessage());
+                writeResponse(exchange, 500, "{\"message\":\"Failed to retrieve funds\"}");
+            }
+        }
+
+        private void writeResponse(HttpExchange exchange, int statusCode, String body) throws IOException {
+            byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json; charset=utf-8");
+            exchange.sendResponseHeaders(statusCode, bytes.length);
+            exchange.getResponseBody().write(bytes);
+            exchange.close();
+        }
+    }
+
     private final class OrderStatusHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -335,8 +371,8 @@ public class OrderRestServer {
                 Map<String, Object> statusResponse = Map.of(
                         "orderID", order.get().getOrderID(),
                         "orderStatus", order.get().getOrderStatus(),
-                        "errorDescription", order.get().getErrorDescription() == null ? "" : order.get().getErrorDescription()
-                );
+                        "errorDescription",
+                        order.get().getErrorDescription() == null ? "" : order.get().getErrorDescription());
                 writeResponse(exchange, 200, objectMapper.writeValueAsString(statusResponse));
             } catch (RuntimeException ex) {
                 LOGGER.severe("Failed to retrieve order status for " + orderID + ": " + ex.getMessage());
@@ -411,7 +447,8 @@ public class OrderRestServer {
                         Optional<Fund> maybeFund = resolveFund(order.getProductID());
                         if (projectionListener != null && maybeFund.isPresent()) {
                             projectionListener.onOrderStatusChanged(advancedOrder, bulkOrder, maybeFund.get());
-                            publishViewEvent("order-updated", toOrderEventPayload(advancedOrder, bulkOrder.getOrderID()));
+                            publishViewEvent("order-updated",
+                                    toOrderEventPayload(advancedOrder, bulkOrder.getOrderID()));
                         }
 
                         if (advancedOrder.getOrderStatus() == OrderStatus.CONFIRMED) {
@@ -435,8 +472,7 @@ public class OrderRestServer {
                         "message", "Bulk confirmation completed",
                         "confirmedBulkOrders", confirmedBulkOrders,
                         "confirmedIndividualOrders", confirmedIndividualOrders,
-                        "missingIndividualOrders", missingIndividualOrders
-                );
+                        "missingIndividualOrders", missingIndividualOrders);
                 writeResponse(exchange, 200, objectMapper.writeValueAsString(response));
             } catch (RuntimeException ex) {
                 LOGGER.severe("Failed to confirm bulk orders: " + ex.getMessage());
@@ -461,7 +497,8 @@ public class OrderRestServer {
                 return;
             }
 
-            if (bulkOrderRepository == null || bulkOrderMappingRepository == null || fundRepository == null || orderStateMachine == null) {
+            if (bulkOrderRepository == null || bulkOrderMappingRepository == null || fundRepository == null
+                    || orderStateMachine == null) {
                 writeResponse(exchange, 500, "{\"message\":\"Book endpoint is not configured\"}");
                 return;
             }
@@ -485,7 +522,8 @@ public class OrderRestServer {
 
                     BigDecimal nav = maybeFund.get().getNAV();
                     if (nav == null || nav.compareTo(BigDecimal.ZERO) <= 0) {
-                        throw new IllegalStateException("Invalid NAV for fund " + bulkOrder.getProductID() + ": " + nav);
+                        throw new IllegalStateException(
+                                "Invalid NAV for fund " + bulkOrder.getProductID() + ": " + nav);
                     }
 
                     bulkOrder.setQuantity(calculateQuantity(bulkOrder.getAmount(), nav));
@@ -512,7 +550,8 @@ public class OrderRestServer {
 
                         if (projectionListener != null) {
                             projectionListener.onOrderStatusChanged(advancedOrder, bulkOrder, maybeFund.get());
-                            publishViewEvent("order-updated", toOrderEventPayload(advancedOrder, bulkOrder.getOrderID()));
+                            publishViewEvent("order-updated",
+                                    toOrderEventPayload(advancedOrder, bulkOrder.getOrderID()));
                         }
 
                         if (advancedOrder.getOrderStatus() == OrderStatus.BOOKED) {
@@ -531,8 +570,7 @@ public class OrderRestServer {
                         "bookedBulkOrders", bookedBulkOrders,
                         "bookedIndividualOrders", bookedIndividualOrders,
                         "missingFunds", missingFunds,
-                        "missingIndividualOrders", missingIndividualOrders
-                );
+                        "missingIndividualOrders", missingIndividualOrders);
                 writeResponse(exchange, 200, objectMapper.writeValueAsString(response));
             } catch (RuntimeException ex) {
                 LOGGER.severe("Failed to book bulk orders: " + ex.getMessage());
@@ -641,8 +679,10 @@ public class OrderRestServer {
             List<OrderView> orders = projectionStore.findAllOrderViews();
             List<BulkOrderView> bulkOrders = projectionStore.findAllBulkOrderViews();
 
-            Map<String, Long> ordersByStatus = orders.stream().collect(Collectors.groupingBy(OrderView::getOrderStatus, Collectors.counting()));
-            Map<String, Long> bulkOrdersByStatus = bulkOrders.stream().collect(Collectors.groupingBy(BulkOrderView::getBulkOrderStatus, Collectors.counting()));
+            Map<String, Long> ordersByStatus = orders.stream()
+                    .collect(Collectors.groupingBy(OrderView::getOrderStatus, Collectors.counting()));
+            Map<String, Long> bulkOrdersByStatus = bulkOrders.stream()
+                    .collect(Collectors.groupingBy(BulkOrderView::getBulkOrderStatus, Collectors.counting()));
 
             Map<String, Object> dashboard = new HashMap<>();
             dashboard.put("totalOrders", orders.size());
@@ -732,8 +772,10 @@ public class OrderRestServer {
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
                         Map<String, Long> sideCounts = fundOrders.stream()
                                 .collect(Collectors.groupingBy(OrderView::getOrderSide, Collectors.counting()));
-                        String fundName = fundOrders.stream().map(OrderView::getFundName).filter(Objects::nonNull).findFirst().orElse("");
-                        BigDecimal nav = fundOrders.stream().map(OrderView::getNAV).filter(Objects::nonNull).findFirst().orElse(null);
+                        String fundName = fundOrders.stream().map(OrderView::getFundName).filter(Objects::nonNull)
+                                .findFirst().orElse("");
+                        BigDecimal nav = fundOrders.stream().map(OrderView::getNAV).filter(Objects::nonNull).findFirst()
+                                .orElse(null);
 
                         Map<String, Object> row = new HashMap<>();
                         row.put("fundID", fundID);
@@ -902,11 +944,16 @@ public class OrderRestServer {
 
     private UserSession resolveAuthenticatedUser(HttpExchange exchange) {
         String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) return null;
+        if (authHeader == null || !authHeader.startsWith("Bearer "))
+            return null;
         String token = authHeader.substring(7).trim();
         UserSession session = tokenStore.get(token);
-        if (session == null) return null;
-        if (session.isExpired()) { tokenStore.remove(token); return null; }
+        if (session == null)
+            return null;
+        if (session.isExpired()) {
+            tokenStore.remove(token);
+            return null;
+        }
         return session;
     }
 
@@ -918,18 +965,19 @@ public class OrderRestServer {
         }
         // Legacy fallback for X-Advisor-ID header or query param
         String fromHeader = exchange.getRequestHeaders().getFirst("X-Advisor-ID");
-        if (fromHeader != null && !fromHeader.isBlank()) return fromHeader.trim();
+        if (fromHeader != null && !fromHeader.isBlank())
+            return fromHeader.trim();
         return getQueryParam(exchange.getRequestURI().getQuery(), "advisorID");
     }
 
     private Map<String, Object> userToResponse(User user) {
         Map<String, Object> resp = new HashMap<>();
-        resp.put("userID",       user.getUserID());
-        resp.put("username",     user.getUsername());
-        resp.put("displayName",  user.getDisplayName());
-        resp.put("role",         user.getRole());
-        resp.put("accountID",    user.getAccountID());
-        resp.put("advisorID",    user.getAdvisorID());
+        resp.put("userID", user.getUserID());
+        resp.put("username", user.getUsername());
+        resp.put("displayName", user.getDisplayName());
+        resp.put("role", user.getRole());
+        resp.put("accountID", user.getAccountID());
+        resp.put("advisorID", user.getAdvisorID());
         return resp;
     }
 
@@ -942,7 +990,8 @@ public class OrderRestServer {
             }
             String advisorId = resolveAdvisorId(exchange);
             if (advisorId == null || advisorId.isBlank()) {
-                sendJsonResponse(exchange, 400, Map.of("message", "X-Advisor-ID header or advisorID query param required"));
+                sendJsonResponse(exchange, 400,
+                        Map.of("message", "X-Advisor-ID header or advisorID query param required"));
                 return;
             }
             if (advisorRepository == null) {
@@ -975,7 +1024,8 @@ public class OrderRestServer {
             }
             String advisorId = resolveAdvisorId(exchange);
             if (advisorId == null || advisorId.isBlank()) {
-                sendJsonResponse(exchange, 400, Map.of("message", "X-Advisor-ID header or advisorID query param required"));
+                sendJsonResponse(exchange, 400,
+                        Map.of("message", "X-Advisor-ID header or advisorID query param required"));
                 return;
             }
             if (advisorRepository == null || advisorClientRelationshipRepository == null) {
@@ -993,9 +1043,12 @@ public class OrderRestServer {
                 row.put("accountID", accountID);
                 if (projectionStore != null) {
                     List<OrderView> orders = projectionStore.findOrdersByAccount(accountID);
-                    BigDecimal totalAmount = orders.stream().map(OrderView::getAmount).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
-                    BigDecimal totalQuantity = orders.stream().map(OrderView::getQuantity).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
-                    Map<String, Long> statuses = orders.stream().collect(Collectors.groupingBy(OrderView::getOrderStatus, Collectors.counting()));
+                    BigDecimal totalAmount = orders.stream().map(OrderView::getAmount).filter(Objects::nonNull)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    BigDecimal totalQuantity = orders.stream().map(OrderView::getQuantity).filter(Objects::nonNull)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    Map<String, Long> statuses = orders.stream()
+                            .collect(Collectors.groupingBy(OrderView::getOrderStatus, Collectors.counting()));
                     row.put("orderCount", orders.size());
                     row.put("totalAmount", totalAmount);
                     row.put("totalQuantity", totalQuantity);
@@ -1041,7 +1094,8 @@ public class OrderRestServer {
                     .filter(id -> filterAccount == null || filterAccount.isBlank() || filterAccount.equals(id))
                     .flatMap(id -> projectionStore.findOrdersByAccount(id).stream())
                     .filter(o -> filterFund == null || filterFund.isBlank() || filterFund.equals(o.getFundID()))
-                    .filter(o -> filterStatus == null || filterStatus.isBlank() || filterStatus.equalsIgnoreCase(o.getOrderStatus()))
+                    .filter(o -> filterStatus == null || filterStatus.isBlank()
+                            || filterStatus.equalsIgnoreCase(o.getOrderStatus()))
                     .sorted(Comparator.comparing(OrderView::getOrderID))
                     .collect(Collectors.toList());
 
@@ -1070,18 +1124,23 @@ public class OrderRestServer {
                 return;
             }
             try {
-                List<Order> orders = objectMapper.readValue(exchange.getRequestBody(), new com.fasterxml.jackson.core.type.TypeReference<List<Order>>() {});
+                List<Order> orders = objectMapper.readValue(exchange.getRequestBody(),
+                        new com.fasterxml.jackson.core.type.TypeReference<List<Order>>() {
+                        });
                 List<String> assignedIds = new ArrayList<>();
                 for (Order order : orders) {
                     if (!advisorClientRelationshipRepository.isClientOfAdvisor(advisorId, order.getAccountID())) {
-                        sendJsonResponse(exchange, 403, Map.of("message", "Account " + order.getAccountID() + " is not a client of advisor " + advisorId));
+                        sendJsonResponse(exchange, 403, Map.of("message",
+                                "Account " + order.getAccountID() + " is not a client of advisor " + advisorId));
                         return;
                     }
                     if (order.getOrderID() == null || order.getOrderID().isBlank()) {
                         order.setOrderID(UniqueIdGenerator.generate("ORD"));
                     }
-                    if (order.getOrderSide() == null) order.setOrderSide(OrderSide.BUY);
-                    if (order.getOrderStatus() == null) order.setOrderStatus(OrderStatus.PLANNED);
+                    if (order.getOrderSide() == null)
+                        order.setOrderSide(OrderSide.BUY);
+                    if (order.getOrderStatus() == null)
+                        order.setOrderStatus(OrderStatus.PLANNED);
                     orderRepository.save(order);
                     assignedIds.add(order.getOrderID());
                     Optional<Fund> maybeFund = resolveFund(order.getProductID());
@@ -1090,7 +1149,8 @@ public class OrderRestServer {
                         publishViewEvent("order-updated", toOrderEventPayload(order, null));
                     }
                 }
-                Map<String, Object> resp = Map.of("message", "Orders planned", "count", orders.size(), "orderIDs", assignedIds);
+                Map<String, Object> resp = Map.of("message", "Orders planned", "count", orders.size(), "orderIDs",
+                        assignedIds);
                 sendJsonResponse(exchange, 201, resp);
             } catch (Exception ex) {
                 LOGGER.severe("Advisor plan orders failed: " + ex.getMessage());
@@ -1122,13 +1182,17 @@ public class OrderRestServer {
             List<String> clientIds = advisorClientRelationshipRepository.findClientAccountIds(advisorId);
             List<OrderView> allOrders = new ArrayList<>();
             if (projectionStore != null) {
-                for (String id : clientIds) allOrders.addAll(projectionStore.findOrdersByAccount(id));
+                for (String id : clientIds)
+                    allOrders.addAll(projectionStore.findOrdersByAccount(id));
             }
             long activeOrders = allOrders.stream()
-                    .filter(o -> List.of("PLANNED","VALIDATED","ENRICHED","PLACED","BULKED","CONFIRMED","CONTRACTED").contains(o.getOrderStatus()))
+                    .filter(o -> List
+                            .of("PLANNED", "VALIDATED", "ENRICHED", "PLACED", "BULKED", "CONFIRMED", "CONTRACTED")
+                            .contains(o.getOrderStatus()))
                     .count();
             long failedOrders = allOrders.stream().filter(o -> "ERRORED".equals(o.getOrderStatus())).count();
-            BigDecimal totalAmount = allOrders.stream().map(OrderView::getAmount).filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
+            BigDecimal totalAmount = allOrders.stream().map(OrderView::getAmount).filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
             Map<String, Object> dashboard = new HashMap<>();
             dashboard.put("advisorID", advisorId);
             dashboard.put("clientCount", clientIds.size());
@@ -1177,7 +1241,8 @@ public class OrderRestServer {
             }
             try {
                 Map<String, String> body = objectMapper.readValue(
-                        exchange.getRequestBody(), new TypeReference<Map<String, String>>() {});
+                        exchange.getRequestBody(), new TypeReference<Map<String, String>>() {
+                        });
                 String username = body.get("username");
                 String password = body.get("password");
                 if (username == null || username.isBlank() || password == null || password.isBlank()) {
@@ -1237,9 +1302,8 @@ public class OrderRestServer {
             // Build advisor -> client accounts mapping
             Map<String, List<String>> advisorClients = new HashMap<>();
             if (advisorClientRelationshipRepository != null) {
-                advisorClientRelationshipRepository.findAll().forEach(rel ->
-                    advisorClients.computeIfAbsent(rel.getAdvisorID(), k -> new ArrayList<>()).add(rel.getAccountID())
-                );
+                advisorClientRelationshipRepository.findAll().forEach(rel -> advisorClients
+                        .computeIfAbsent(rel.getAdvisorID(), k -> new ArrayList<>()).add(rel.getAccountID()));
             }
 
             List<Map<String, Object>> userList = users.stream().map(u -> {
@@ -1259,7 +1323,7 @@ public class OrderRestServer {
                 }
                 return row;
             }).sorted(Comparator.comparing(m -> (String) m.get("userID")))
-              .collect(Collectors.toList());
+                    .collect(Collectors.toList());
 
             sendJsonResponse(exchange, 200, userList);
         }

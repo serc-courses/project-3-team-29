@@ -10,6 +10,10 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      '/funds': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+      },
       '/view': {
         target: 'http://localhost:8080',
         changeOrigin: true,

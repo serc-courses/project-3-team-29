@@ -9,6 +9,7 @@ import Accounts from './pages/Accounts'
 import Users from './pages/Users'
 import NewOrder from './pages/NewOrder'
 import { useSse } from './hooks/useSse'
+import AggregateFund from './pages/AggregateFund'
 
 function App() {
   const [sseConnected, setSseConnected] = useState(false)
@@ -37,6 +38,7 @@ function App() {
           <Route path="/accounts" element={<Accounts />} />
           <Route path="/users" element={<Users />} />
           <Route path="/orders/new" element={<NewOrder />} />
+          <Route path="/aggregate-funds" element={<AggregateFund />} />
         </Routes>
       </Layout>
     </BrowserRouter>

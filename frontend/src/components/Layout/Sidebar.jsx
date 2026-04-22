@@ -82,6 +82,7 @@ const NAV_ICONS = {
   funds:     <IconFunds />,
   accounts:  <IconAccounts />,
   users:     <IconUsers />,
+  aggregateFunds: <IconFunds />,
 }
 
 /* ─── Toast ──────────────────────────────────────────────────────────────────── */
