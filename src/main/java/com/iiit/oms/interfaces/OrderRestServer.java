@@ -22,6 +22,8 @@ import com.iiit.oms.model.UserSession;
 import com.iiit.oms.auth.SessionStore;
 import com.iiit.oms.auth.InMemorySessionStore;
 import com.iiit.oms.repository.AuditLogRepository;
+import com.iiit.oms.repository.ReconciliationBreakRepository;
+import com.iiit.oms.model.ReconciliationBreak;
 import com.iiit.oms.idempotency.IdempotencyStore;
 import com.iiit.oms.repository.AccountRepository;
 import com.iiit.oms.repository.AdvisorClientRelationshipRepository;
@@ -87,6 +89,10 @@ public class OrderRestServer implements SseBroadcaster {
     private static final String ADVISOR_DASHBOARD_PATH = "/advisor/dashboard";
     private static final String TRANSFER_AGENT_CONTRACT_PATH = "/transfer-agent/contract";
     private static final String ORDER_AUDIT_PATH = "/orders/audit";
+    private static final String VIEW_RECONCILIATION_PATH = "/view/reconciliation";
+    private static final String RECONCILIATION_RESOLVE_PATH = "/view/reconciliation/resolve";
+    private static final String PORTFOLIO_PATH = "/view/portfolio";
+    private static final String FUNDS_NAV_PATH = "/funds/nav";
 
     private final HttpServer httpServer;
     private final OrderRepository orderRepository;
@@ -104,7 +110,9 @@ public class OrderRestServer implements SseBroadcaster {
     private final ObjectMapper objectMapper;
     private final List<OutputStream> sseClients;
     private IdempotencyStore idempotencyStore;
+    private com.iiit.oms.kafka.KafkaOrderEventPublisher kafkaPublisher;
     private AuditLogRepository auditLogRepository;
+    private ReconciliationBreakRepository reconciliationBreakRepository;
 
     public OrderRestServer(int port, OrderRepository orderRepository) throws IOException {
         this(port, orderRepository, null, null, null, null, null, null, null, null, null, null);
@@ -194,6 +202,10 @@ public class OrderRestServer implements SseBroadcaster {
         this.httpServer.createContext(VIEW_USERS_PATH, withCors(new ViewUsersHandler()));
         this.httpServer.createContext(TRANSFER_AGENT_CONTRACT_PATH, withCors(new ContractCallbackHandler()));
         this.httpServer.createContext(ORDER_AUDIT_PATH, withCors(new AuditLogHandler()));
+        this.httpServer.createContext(RECONCILIATION_RESOLVE_PATH, withCors(new ResolveReconciliationHandler()));
+        this.httpServer.createContext(VIEW_RECONCILIATION_PATH, withCors(new ViewReconciliationHandler()));
+        this.httpServer.createContext(PORTFOLIO_PATH, withCors(new PortfolioHandler()));
+        this.httpServer.createContext(FUNDS_NAV_PATH, withCors(new UpdateNavHandler()));
         this.httpServer.setExecutor(Executors.newFixedThreadPool(16));
     }
 
@@ -236,6 +248,10 @@ public class OrderRestServer implements SseBroadcaster {
         this.idempotencyStore = idempotencyStore;
     }
 
+    public void setKafkaPublisher(com.iiit.oms.kafka.KafkaOrderEventPublisher kafkaPublisher) {
+        this.kafkaPublisher = kafkaPublisher;
+    }
+
     public void setSessionStore(SessionStore sessionStore) {
         if (sessionStore != null) {
             this.tokenStore = sessionStore;
@@ -244,6 +260,10 @@ public class OrderRestServer implements SseBroadcaster {
 
     public void setAuditLogRepository(AuditLogRepository auditLogRepository) {
         this.auditLogRepository = auditLogRepository;
+    }
+
+    public void setReconciliationBreakRepository(ReconciliationBreakRepository reconciliationBreakRepository) {
+        this.reconciliationBreakRepository = reconciliationBreakRepository;
     }
 
     private final class PlanOrdersHandler implements HttpHandler {
@@ -271,7 +291,8 @@ public class OrderRestServer implements SseBroadcaster {
                     }
 
                     // Idempotency check: only use client-supplied key (X-Idempotency-Key header).
-                    // The natural-key fallback (accountID:productID:amount:side) was removed because
+                    // The natural-key fallback (accountID:productID:amount:side) was removed
+                    // because
                     // it blocked legitimate repeat orders for the same fund/amount combination.
                     if (idempotencyStore != null && clientIdempotencyKey != null && !clientIdempotencyKey.isBlank()) {
                         int idx = orders.indexOf(order);
@@ -280,8 +301,11 @@ public class OrderRestServer implements SseBroadcaster {
                         if (!isNew) {
                             String existingId = idempotencyStore.getOrderId(idemKey);
                             idempotencyStore.incrementDedupHits();
-                            LOGGER.warning("Duplicate order submission detected for key=" + idemKey + " existing orderID=" + existingId);
-                            writeResponse(exchange, 409, "{\"message\":\"Duplicate order submission\",\"existingOrderID\":\"" + existingId + "\"}");
+                            LOGGER.warning("Duplicate order submission detected for key=" + idemKey
+                                    + " existing orderID=" + existingId);
+                            writeResponse(exchange, 409,
+                                    "{\"message\":\"Duplicate order submission\",\"existingOrderID\":\"" + existingId
+                                            + "\"}");
                             return;
                         }
                     }
@@ -1505,8 +1529,10 @@ public class OrderRestServer implements SseBroadcaster {
 
     /**
      * POST /transfer-agent/contract
-     * Simulates the Transfer Agent calling back with contract details (NAV + total shares).
-     * Body: { "bulkOrderId": "BLK-xxx", "nav": 47.23, "totalShares": 4447.28, "contractRef": "CTR-001" }
+     * Simulates the Transfer Agent calling back with contract details (NAV + total
+     * shares).
+     * Body: { "bulkOrderId": "BLK-xxx", "nav": 47.23, "totalShares": 4447.28,
+     * "contractRef": "CTR-001" }
      * Advances all constituent orders: TRANSMITTED/CONFIRMED → CONTRACTED → BOOKED
      */
     private final class ContractCallbackHandler implements HttpHandler {
@@ -1522,7 +1548,8 @@ public class OrderRestServer implements SseBroadcaster {
             }
             try {
                 Map<String, Object> body = objectMapper.readValue(exchange.getRequestBody(),
-                        new TypeReference<Map<String, Object>>() {});
+                        new TypeReference<Map<String, Object>>() {
+                        });
                 String bulkOrderId = (String) body.get("bulkOrderId");
                 if (bulkOrderId == null || bulkOrderId.isBlank()) {
                     sendJsonResponse(exchange, 400, Map.of("message", "bulkOrderId is required"));
@@ -1557,15 +1584,44 @@ public class OrderRestServer implements SseBroadcaster {
                         .findIndividualOrderIds(bulkOrderId).orElse(List.of());
 
                 BigDecimal bulkAmount = bulkOrder.getAmount();
+
+                // --- Reconciliation break detection ---
+                boolean hasBreak = false;
+                if (reconciliationBreakRepository != null && bulkAmount != null
+                        && bulkAmount.compareTo(BigDecimal.ZERO) > 0) {
+                    BigDecimal actualValue = nav.multiply(totalShares)
+                            .setScale(8, java.math.RoundingMode.HALF_UP);
+                    BigDecimal difference = bulkAmount.subtract(actualValue).abs();
+                    BigDecimal threshold = bulkAmount.multiply(new BigDecimal("0.0001"))
+                            .setScale(8, java.math.RoundingMode.HALF_UP); // 0.01%
+                    if (difference.compareTo(threshold) > 0) {
+                        hasBreak = true;
+                        ReconciliationBreak breakRecord = new ReconciliationBreak(
+                                com.iiit.oms.util.UniqueIdGenerator.generate("BRK"),
+                                bulkOrderId,
+                                "AMOUNT_MISMATCH",
+                                bulkAmount.toPlainString(),
+                                actualValue.toPlainString(),
+                                java.time.Instant.now());
+                        reconciliationBreakRepository.save(breakRecord);
+                        LOGGER.warning("Reconciliation break detected for bulk order " + bulkOrderId
+                                + ": expected=" + bulkAmount.toPlainString()
+                                + " received=" + actualValue.toPlainString()
+                                + " — orders will be FROZEN at CONTRACTED status");
+                    }
+                }
+
                 int contracted = 0;
                 int booked = 0;
 
                 for (String orderId : individualOrderIds) {
                     Optional<Order> maybeOrder = orderRepository.findByOrderId(orderId);
-                    if (maybeOrder.isEmpty()) continue;
+                    if (maybeOrder.isEmpty())
+                        continue;
                     Order order = maybeOrder.get();
 
-                    // Proportional share allocation: clientShares = (clientAmount / bulkAmount) * totalShares
+                    // Proportional share allocation: clientShares = (clientAmount / bulkAmount) *
+                    // totalShares
                     BigDecimal allocatedShares = BigDecimal.ZERO;
                     if (bulkAmount != null && bulkAmount.compareTo(BigDecimal.ZERO) > 0 && order.getAmount() != null) {
                         allocatedShares = order.getAmount()
@@ -1579,10 +1635,13 @@ public class OrderRestServer implements SseBroadcaster {
                     orderRepository.save(order);
                     contracted++;
 
-                    // BOOKED
-                    orderStateMachine.advanceToBooked(order);
-                    orderRepository.save(order);
-                    booked++;
+                    // Only advance to BOOKED if there is NO reconciliation break.
+                    // When a break is detected, orders freeze at CONTRACTED pending ops review.
+                    if (!hasBreak) {
+                        orderStateMachine.advanceToBooked(order);
+                        orderRepository.save(order);
+                        booked++;
+                    }
 
                     Optional<Fund> maybeFund = resolveFund(order.getProductID());
                     if (projectionListener != null && maybeFund.isPresent()) {
@@ -1591,13 +1650,17 @@ public class OrderRestServer implements SseBroadcaster {
                     }
                 }
 
-                // Update bulk order → CONTRACTED → BOOKED
+                // Update bulk order status
                 bulkOrder.setContractRef(contractRef);
                 bulkOrder.setBulkNav(nav);
                 bulkOrder.setBulkOrderStatus(BulkOrderStatus.CONTRACTED);
                 bulkOrderRepository.save(bulkOrder);
-                bulkOrder.setBulkOrderStatus(BulkOrderStatus.BOOKED);
-                bulkOrderRepository.save(bulkOrder);
+
+                // Only advance bulk order to BOOKED if there is no break
+                if (!hasBreak) {
+                    bulkOrder.setBulkOrderStatus(BulkOrderStatus.BOOKED);
+                    bulkOrderRepository.save(bulkOrder);
+                }
 
                 Optional<Fund> maybeFund = resolveFund(bulkOrder.getProductID());
                 if (projectionListener != null && maybeFund.isPresent()) {
@@ -1605,18 +1668,387 @@ public class OrderRestServer implements SseBroadcaster {
                     publishViewEvent("bulk-order-updated", toBulkOrderEventPayload(bulkOrder, individualOrderIds));
                 }
 
-                sendJsonResponse(exchange, 200, Map.of(
-                        "message", "Contract callback processed",
-                        "bulkOrderId", bulkOrderId,
-                        "contractRef", contractRef,
-                        "nav", nav,
-                        "totalShares", totalShares,
-                        "contractedOrders", contracted,
-                        "bookedOrders", booked
-                ));
+                Map<String, Object> responseMap = new HashMap<>();
+                responseMap.put("message", hasBreak
+                        ? "Contract received — RECONCILIATION BREAK detected. Orders frozen at CONTRACTED."
+                        : "Contract callback processed");
+                responseMap.put("bulkOrderId", bulkOrderId);
+                responseMap.put("contractRef", contractRef);
+                responseMap.put("nav", nav);
+                responseMap.put("totalShares", totalShares);
+                responseMap.put("contractedOrders", contracted);
+                responseMap.put("bookedOrders", booked);
+                responseMap.put("reconciliationBreak", hasBreak);
+                sendJsonResponse(exchange, hasBreak ? 200 : 200, responseMap);
             } catch (Exception ex) {
                 LOGGER.severe("Contract callback failed: " + ex.getMessage());
-                sendJsonResponse(exchange, 500, Map.of("message", "Failed to process contract callback: " + ex.getMessage()));
+                sendJsonResponse(exchange, 500,
+                        Map.of("message", "Failed to process contract callback: " + ex.getMessage()));
+            }
+        }
+    }
+
+    /**
+     * GET /view/reconciliation
+     * Returns all unresolved reconciliation breaks.
+     */
+    private final class ViewReconciliationHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only GET is supported"));
+                return;
+            }
+            if (reconciliationBreakRepository == null) {
+                sendJsonResponse(exchange, 503, Map.of("message", "Reconciliation engine not configured"));
+                return;
+            }
+            try {
+                String query = exchange.getRequestURI().getQuery();
+                String showAll = getQueryParam(query, "all");
+                List<ReconciliationBreak> breaks;
+                if ("true".equalsIgnoreCase(showAll)) {
+                    breaks = reconciliationBreakRepository.findAll();
+                } else {
+                    breaks = reconciliationBreakRepository.findUnresolved();
+                }
+                List<Map<String, Object>> response = breaks.stream().map(b -> {
+                    Map<String, Object> row = new HashMap<>();
+                    row.put("breakId", b.getBreakId());
+                    row.put("bulkOrderId", b.getBulkOrderId());
+                    row.put("breakType", b.getBreakType());
+                    row.put("expectedValue", b.getExpectedValue());
+                    row.put("receivedValue", b.getReceivedValue());
+                    row.put("detectedAt", b.getDetectedAt() != null ? b.getDetectedAt().toString() : null);
+                    row.put("resolved", b.isResolved());
+                    row.put("escalated", b.isEscalated());
+                    return row;
+                }).collect(Collectors.toList());
+                sendJsonResponse(exchange, 200, response);
+            } catch (Exception ex) {
+                LOGGER.severe("Failed to fetch reconciliation breaks: " + ex.getMessage());
+                sendJsonResponse(exchange, 500, Map.of("message", "Failed to fetch reconciliation breaks"));
+            }
+        }
+    }
+
+    /**
+     * GET /view/portfolio
+     * Computes P/L for all BOOKED orders that have NAV and allocatedShares.
+     * Optional query params: ?accountID=xxx to filter by investor.
+     * Returns per-holding P/L plus a portfolio summary.
+     */
+    private final class PortfolioHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only GET is supported"));
+                return;
+            }
+            try {
+                String query = exchange.getRequestURI().getQuery();
+                String accountFilter = getQueryParam(query, "accountID");
+
+                // Get all orders and filter to BOOKED with NAV data
+                List<Order> allOrders = orderRepository.findAll();
+                List<Order> bookedOrders = allOrders.stream()
+                        .filter(o -> o.getOrderStatus() == OrderStatus.BOOKED)
+                        .filter(o -> o.getNav() != null && o.getAllocatedShares() != null)
+                        .filter(o -> accountFilter == null || accountFilter.isBlank()
+                                || accountFilter.equals(o.getAccountID()))
+                        .collect(Collectors.toList());
+
+                // Build a fund NAV lookup (current live NAVs)
+                Map<String, BigDecimal> currentNavs = new HashMap<>();
+                for (Fund f : fundRepository.findAll()) {
+                    currentNavs.put(f.getFundID(), f.getNAV());
+                }
+
+                // Build fund name lookup
+                Map<String, String> fundNames = new HashMap<>();
+                for (Fund f : fundRepository.findAll()) {
+                    fundNames.put(f.getFundID(), f.getFundName());
+                }
+
+                // Aggregate P/L per holding using average cost basis
+                Map<String, Map<String, Object>> aggregated = new HashMap<>();
+                for (Order order : bookedOrders) {
+                    String fundId = order.getProductID();
+                    String accountId = order.getAccountID();
+                    String key = accountId + ":" + fundId;
+
+                    Map<String, Object> h = aggregated.computeIfAbsent(key, k -> {
+                        Map<String, Object> map = new HashMap<>();
+                        map.put("accountID", accountId);
+                        map.put("fundID", fundId);
+                        map.put("fundName", fundNames.getOrDefault(fundId, fundId));
+                        map.put("shares", BigDecimal.ZERO);
+                        map.put("investedAmount", BigDecimal.ZERO);
+                        return map;
+                    });
+
+                    BigDecimal shares = order.getAllocatedShares();
+                    BigDecimal amount = order.getAmount();
+
+                    BigDecimal currShares = (BigDecimal) h.get("shares");
+                    BigDecimal currInvested = (BigDecimal) h.get("investedAmount");
+
+                    if (order.getOrderSide() == null || order.getOrderSide() == com.iiit.oms.model.OrderSide.BUY) {
+                        h.put("shares", currShares.add(shares));
+                        h.put("investedAmount", currInvested.add(amount));
+                    } else if (order.getOrderSide() == com.iiit.oms.model.OrderSide.SELL) {
+                        if (currShares.compareTo(BigDecimal.ZERO) > 0) {
+                            BigDecimal avgCost = currInvested.divide(currShares, 8, java.math.RoundingMode.HALF_UP);
+                            currShares = currShares.subtract(shares);
+                            if (currShares.compareTo(BigDecimal.ZERO) < 0) {
+                                currShares = BigDecimal.ZERO;
+                            }
+                            h.put("shares", currShares);
+                            h.put("investedAmount",
+                                    currShares.multiply(avgCost).setScale(2, java.math.RoundingMode.HALF_UP));
+                        }
+                    }
+                }
+
+                List<Map<String, Object>> holdings = new ArrayList<>();
+                BigDecimal totalInvested = BigDecimal.ZERO;
+                BigDecimal totalCurrentValue = BigDecimal.ZERO;
+
+                for (Map<String, Object> h : aggregated.values()) {
+                    BigDecimal shares = (BigDecimal) h.get("shares");
+                    if (shares.compareTo(BigDecimal.ZERO) <= 0)
+                        continue; // Skip emptied positions
+
+                    BigDecimal invested = (BigDecimal) h.get("investedAmount");
+                    String fundId = (String) h.get("fundID");
+                    BigDecimal liveNav = currentNavs.getOrDefault(fundId, BigDecimal.ZERO);
+
+                    // Average buy nav for display
+                    BigDecimal avgBuyNav = invested.divide(shares, 4, java.math.RoundingMode.HALF_UP);
+
+                    BigDecimal currentValue = liveNav.multiply(shares).setScale(2, java.math.RoundingMode.HALF_UP);
+                    BigDecimal pnl = currentValue.subtract(invested);
+                    BigDecimal pnlPct = invested.compareTo(BigDecimal.ZERO) > 0
+                            ? pnl.divide(invested, 6, java.math.RoundingMode.HALF_UP)
+                                    .multiply(new BigDecimal("100")).setScale(2, java.math.RoundingMode.HALF_UP)
+                            : BigDecimal.ZERO;
+
+                    totalInvested = totalInvested.add(invested);
+                    totalCurrentValue = totalCurrentValue.add(currentValue);
+
+                    Map<String, Object> out = new HashMap<>();
+                    out.put("orderID", fundId + "-agg"); // Unique enough for React keys when aggregated
+                    out.put("accountID", h.get("accountID"));
+                    out.put("fundID", fundId);
+                    out.put("fundName", h.get("fundName"));
+                    out.put("investedAmount", invested);
+                    out.put("buyNav", avgBuyNav);
+                    out.put("allocatedShares", shares);
+                    out.put("currentNav", liveNav);
+                    out.put("currentValue", currentValue);
+                    out.put("pnl", pnl);
+                    out.put("pnlPercent", pnlPct);
+                    holdings.add(out);
+                }
+
+                BigDecimal totalPnl = totalCurrentValue.subtract(totalInvested);
+                BigDecimal totalPnlPct = totalInvested.compareTo(BigDecimal.ZERO) > 0
+                        ? totalPnl.divide(totalInvested, 6, java.math.RoundingMode.HALF_UP)
+                                .multiply(new BigDecimal("100")).setScale(2, java.math.RoundingMode.HALF_UP)
+                        : BigDecimal.ZERO;
+
+                Map<String, Object> response = new HashMap<>();
+                response.put("holdings", holdings);
+                response.put("totalInvested", totalInvested);
+                response.put("totalCurrentValue", totalCurrentValue);
+                response.put("totalPnl", totalPnl);
+                response.put("totalPnlPercent", totalPnlPct);
+                response.put("holdingCount", holdings.size());
+                sendJsonResponse(exchange, 200, response);
+            } catch (Exception ex) {
+                LOGGER.severe("Portfolio P/L computation failed: " + ex.getMessage());
+                sendJsonResponse(exchange, 500, Map.of("message", "Failed to compute portfolio: " + ex.getMessage()));
+            }
+        }
+    }
+
+    /**
+     * POST /view/reconciliation/resolve
+     * Allows ops to resolve a reconciliation break.
+     * Body: { "breakId": "BRK-xxx", "action": "ACCEPT" | "RETRANSMIT" | "CANCEL" }
+     *
+     * ACCEPT = Acknowledge the TA's values. Absorb the difference and advance
+     * all frozen CONTRACTED orders → BOOKED. This is the most common
+     * resolution (e.g., TA deducted a legitimate fee).
+     *
+     * RETRANSMIT = Dispute the TA's values. Roll all CONTRACTED orders back to
+     * TRANSMITTED so a new corrected contract callback can be received.
+     * The ops team contacts the TA to re-issue a corrected contract.
+     *
+     * CANCEL = Abandon the orders entirely. Mark all CONTRACTED orders as
+     * ERRORED and bulk order as ERRORED. Used when the break is
+     * unresolvable (e.g., fraud, severe communication failure).
+     */
+    private final class ResolveReconciliationHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only POST is supported"));
+                return;
+            }
+            if (reconciliationBreakRepository == null || bulkOrderRepository == null
+                    || bulkOrderMappingRepository == null || orderStateMachine == null) {
+                sendJsonResponse(exchange, 503, Map.of("message", "Reconciliation resolve not configured"));
+                return;
+            }
+            try {
+                Map<String, Object> body = objectMapper.readValue(exchange.getRequestBody(),
+                        new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {
+                        });
+                String breakId = (String) body.get("breakId");
+                String action = (String) body.get("action");
+                if (breakId == null || breakId.isBlank()) {
+                    sendJsonResponse(exchange, 400, Map.of("message", "breakId is required"));
+                    return;
+                }
+                if (action == null || (!"ACCEPT".equalsIgnoreCase(action)
+                        && !"RETRANSMIT".equalsIgnoreCase(action)
+                        && !"CANCEL".equalsIgnoreCase(action))) {
+                    sendJsonResponse(exchange, 400, Map.of("message", "action must be ACCEPT, RETRANSMIT, or CANCEL"));
+                    return;
+                }
+
+                // Find the break
+                List<ReconciliationBreak> allBreaks = reconciliationBreakRepository.findAll();
+                ReconciliationBreak targetBreak = allBreaks.stream()
+                        .filter(b -> b.getBreakId().equals(breakId))
+                        .findFirst().orElse(null);
+                if (targetBreak == null) {
+                    sendJsonResponse(exchange, 404, Map.of("message", "Break not found: " + breakId));
+                    return;
+                }
+                if (targetBreak.isResolved()) {
+                    sendJsonResponse(exchange, 409, Map.of("message", "Break already resolved"));
+                    return;
+                }
+
+                String bulkOrderId = targetBreak.getBulkOrderId();
+                Optional<BulkOrder> maybeBulk = bulkOrderRepository.findByOrderId(bulkOrderId);
+                if (maybeBulk.isEmpty()) {
+                    sendJsonResponse(exchange, 404, Map.of("message", "Bulk order not found: " + bulkOrderId));
+                    return;
+                }
+                BulkOrder bulkOrder = maybeBulk.get();
+                List<String> individualOrderIds = bulkOrderMappingRepository
+                        .findIndividualOrderIds(bulkOrderId).orElse(List.of());
+
+                int affectedOrders = 0;
+                String resultMessage;
+
+                if ("ACCEPT".equalsIgnoreCase(action)) {
+                    // ---- ACCEPT: Advance frozen CONTRACTED orders → BOOKED ----
+                    for (String orderId : individualOrderIds) {
+                        Optional<Order> maybeOrder = orderRepository.findByOrderId(orderId);
+                        if (maybeOrder.isEmpty())
+                            continue;
+                        Order order = maybeOrder.get();
+                        if (order.getOrderStatus() != OrderStatus.CONTRACTED)
+                            continue;
+
+                        orderStateMachine.advanceToBooked(order);
+                        orderRepository.save(order);
+                        affectedOrders++;
+
+                        Optional<Fund> maybeFund = resolveFund(order.getProductID());
+                        if (projectionListener != null && maybeFund.isPresent()) {
+                            projectionListener.onOrderStatusChanged(order, bulkOrder, maybeFund.get());
+                            publishViewEvent("order-updated", toOrderEventPayload(order, bulkOrderId));
+                        }
+                    }
+                    if (bulkOrder.getBulkOrderStatus() == BulkOrderStatus.CONTRACTED) {
+                        bulkOrder.setBulkOrderStatus(BulkOrderStatus.BOOKED);
+                        bulkOrderRepository.save(bulkOrder);
+                    }
+                    resultMessage = "Break accepted — " + affectedOrders + " orders advanced to BOOKED";
+
+                } else if ("RETRANSMIT".equalsIgnoreCase(action)) {
+                    // ---- RETRANSMIT: Roll back CONTRACTED → TRANSMITTED ----
+                    // Clear the contract data so a fresh contract callback can be received
+                    for (String orderId : individualOrderIds) {
+                        Optional<Order> maybeOrder = orderRepository.findByOrderId(orderId);
+                        if (maybeOrder.isEmpty())
+                            continue;
+                        Order order = maybeOrder.get();
+                        if (order.getOrderStatus() != OrderStatus.CONTRACTED)
+                            continue;
+
+                        order.setOrderStatus(OrderStatus.TRANSMITTED);
+                        order.setContractRef(null);
+                        order.setNav(null);
+                        order.setAllocatedShares(null);
+                        orderRepository.save(order);
+                        affectedOrders++;
+
+                        Optional<Fund> maybeFund = resolveFund(order.getProductID());
+                        if (projectionListener != null && maybeFund.isPresent()) {
+                            projectionListener.onOrderStatusChanged(order, bulkOrder, maybeFund.get());
+                            publishViewEvent("order-updated", toOrderEventPayload(order, bulkOrderId));
+                        }
+                    }
+                    // Roll bulk order back to TRANSMITTED
+                    bulkOrder.setBulkOrderStatus(BulkOrderStatus.TRANSMITTED);
+                    bulkOrder.setContractRef(null);
+                    bulkOrder.setBulkNav(null);
+                    bulkOrderRepository.save(bulkOrder);
+                    resultMessage = "Break rejected — " + affectedOrders
+                            + " orders rolled back to TRANSMITTED. Submit a new corrected contract callback.";
+
+                } else {
+                    // ---- CANCEL: Mark all orders as ERRORED ----
+                    for (String orderId : individualOrderIds) {
+                        Optional<Order> maybeOrder = orderRepository.findByOrderId(orderId);
+                        if (maybeOrder.isEmpty())
+                            continue;
+                        Order order = maybeOrder.get();
+                        if (order.getOrderStatus() != OrderStatus.CONTRACTED)
+                            continue;
+
+                        order.setOrderStatus(OrderStatus.ERRORED);
+                        order.setErrorDescription("Cancelled due to unresolvable reconciliation break " + breakId);
+                        orderRepository.save(order);
+                        affectedOrders++;
+
+                        Optional<Fund> maybeFund = resolveFund(order.getProductID());
+                        if (projectionListener != null && maybeFund.isPresent()) {
+                            projectionListener.onOrderStatusChanged(order, bulkOrder, maybeFund.get());
+                            publishViewEvent("order-updated", toOrderEventPayload(order, bulkOrderId));
+                        }
+                    }
+                    // There is no ERRORED on BulkOrderStatus, so keep at CONTRACTED
+                    // but the individual orders are all ERRORED which effectively kills the batch
+                    resultMessage = "Break cancelled — " + affectedOrders
+                            + " orders marked as ERRORED. Bulk order abandoned.";
+                }
+
+                // Publish bulk order update
+                Optional<Fund> maybeFund = resolveFund(bulkOrder.getProductID());
+                if (projectionListener != null && maybeFund.isPresent()) {
+                    projectionListener.onBulkOrderStatusChanged(bulkOrder, maybeFund.get(), individualOrderIds);
+                    publishViewEvent("bulk-order-updated", toBulkOrderEventPayload(bulkOrder, individualOrderIds));
+                }
+
+                // Mark break as resolved
+                reconciliationBreakRepository.markResolved(breakId);
+
+                Map<String, Object> response = new HashMap<>();
+                response.put("message", resultMessage);
+                response.put("breakId", breakId);
+                response.put("action", action.toUpperCase());
+                response.put("affectedOrders", affectedOrders);
+                sendJsonResponse(exchange, 200, response);
+            } catch (Exception ex) {
+                LOGGER.severe("Failed to resolve reconciliation break: " + ex.getMessage());
+                sendJsonResponse(exchange, 500, Map.of("message", "Failed to resolve break: " + ex.getMessage()));
             }
         }
     }
@@ -1660,5 +2092,72 @@ public class OrderRestServer implements SseBroadcaster {
             }
         }
     }
-}
 
+    /**
+     * POST /funds/nav
+     * Body: { "fundID": "FND001", "nav": 52.30 }
+     * Updates the fund's NAV in DB, publishes to Kafka oms.nav.updated, and
+     * broadcasts SSE.
+     */
+    private final class UpdateNavHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only POST is supported"));
+                return;
+            }
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> body = objectMapper.readValue(exchange.getRequestBody(), Map.class);
+                String fundID = (String) body.get("fundID");
+                Number navNum = (Number) body.get("nav");
+
+                if (fundID == null || fundID.isBlank() || navNum == null) {
+                    sendJsonResponse(exchange, 400, Map.of("message", "fundID and nav are required"));
+                    return;
+                }
+
+                BigDecimal newNav = new BigDecimal(navNum.toString()).setScale(2, java.math.RoundingMode.HALF_UP);
+                if (newNav.compareTo(BigDecimal.ZERO) <= 0) {
+                    sendJsonResponse(exchange, 400, Map.of("message", "NAV must be greater than 0"));
+                    return;
+                }
+
+                Optional<Fund> maybeFund = fundRepository.findByFundId(fundID);
+                if (maybeFund.isEmpty()) {
+                    sendJsonResponse(exchange, 404, Map.of("message", "Fund not found: " + fundID));
+                    return;
+                }
+
+                Fund fund = maybeFund.get();
+                BigDecimal oldNav = fund.getNAV();
+                fund.setNAV(newNav);
+                fundRepository.save(fund);
+
+                LOGGER.info("NAV updated for " + fundID + ": " + oldNav + " -> " + newNav);
+
+                // Publish to Kafka
+                if (kafkaPublisher != null) {
+                    kafkaPublisher.publishNavUpdated(fundID, fund.getFundName(), oldNav, newNav);
+                }
+
+                // Broadcast SSE event so all connected UIs refresh
+                publishViewEvent("nav-updated", Map.of(
+                        "fundID", fundID,
+                        "fundName", fund.getFundName(),
+                        "oldNav", oldNav,
+                        "newNav", newNav));
+
+                sendJsonResponse(exchange, 200, Map.of(
+                        "message", "NAV updated",
+                        "fundID", fundID,
+                        "fundName", fund.getFundName(),
+                        "oldNav", oldNav,
+                        "newNav", newNav));
+            } catch (Exception ex) {
+                LOGGER.severe("Failed to update NAV: " + ex.getMessage());
+                sendJsonResponse(exchange, 500, Map.of("message", "Failed to update NAV: " + ex.getMessage()));
+            }
+        }
+    }
+}

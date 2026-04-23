@@ -1,0 +1,223 @@
+.pf-user-page {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+    padding-bottom: 80px;
+}
+
+.pf-user-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: var(--sp-2);
+}
+
+.pf-user-title {
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    color: var(--color-text-900);
+    letter-spacing: -0.02em;
+}
+
+.pf-refresh-btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 6px 14px;
+    font-size: var(--text-xs);
+    color: var(--color-text-500);
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.pf-refresh-btn:hover {
+    background: var(--color-surface);
+}
+
+/* Hero card */
+.pf-hero-card {
+    border-radius: var(--radius-lg);
+    padding: var(--sp-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+    color: #fff;
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s ease;
+}
+
+.pf-hero-positive {
+    background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+}
+
+.pf-hero-negative {
+    background: linear-gradient(135deg, #DC2626 0%, #EF4444 100%);
+}
+
+.pf-hero-label {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    opacity: 0.9;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.pf-hero-value-wrap {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-top: 4px;
+}
+
+.pf-hero-value {
+    font-size: 2.5rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.03em;
+}
+
+.pf-hero-pct.badge {
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border: none;
+    font-size: var(--text-sm);
+    padding: 4px 10px;
+}
+
+.pf-hero-meta {
+    font-size: var(--text-sm);
+    opacity: 0.85;
+    margin-top: 12px;
+}
+
+.pf-disclaimer {
+    font-size: var(--text-xs);
+    color: var(--color-text-500);
+    text-align: center;
+    font-style: italic;
+    margin-top: -8px;
+}
+
+/* Holdings list */
+.pf-user-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+}
+
+.pf-holding-card {
+    padding: var(--sp-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+    transition: transform 0.15s;
+}
+
+.pf-holding-card:active {
+    transform: scale(0.98);
+}
+
+.pf-holding-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.pf-holding-fund {
+    font-weight: 600;
+    color: var(--color-text-900);
+    font-size: var(--text-base);
+    margin-bottom: 2px;
+}
+
+.pf-holding-id {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    color: var(--color-text-400);
+}
+
+.pf-holding-pnl {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-weight: 700;
+    font-size: var(--text-lg);
+    line-height: 1.1;
+}
+
+.pf-holding-pnl-pct {
+    font-size: var(--text-xs);
+    opacity: 0.8;
+    margin-top: 4px;
+}
+
+.text-green {
+    color: #059669;
+}
+
+.text-red {
+    color: #dc2626;
+}
+
+.pf-holding-divider {
+    height: 1px;
+    background: var(--color-border);
+    margin: 4px 0;
+}
+
+.pf-holding-stats {
+    display: flex;
+    justify-content: space-between;
+}
+
+.pf-holding-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.pf-hs-label {
+    font-size: var(--text-xs);
+    color: var(--color-text-400);
+    font-weight: 500;
+}
+
+.pf-hs-val {
+    font-size: var(--text-sm);
+    color: var(--color-text-700);
+    font-weight: 600;
+}
+
+.pf-hs-labelpf-live-nav {
+    position: relative;
+    font-size: var(--text-xs);
+    color: var(--color-text-400);
+    font-weight: 500;
+}
+
+.pf-hs-labelpf-live-nav::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    right: -8px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: #10b981;
+    animation: pf-pulse 2s infinite;
+}
+
+@keyframes pf-pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.4;
+        transform: scale(0.8);
+    }
+}

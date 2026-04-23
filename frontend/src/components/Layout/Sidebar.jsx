@@ -18,7 +18,7 @@ const LogoIcon = () => (
 const IconDashboard = () => (
   <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
     <rect x="1" y="8.5" width="3.2" height="5.5" rx="0.8" fill="currentColor" />
-    <rect x="5.9" y="5"   width="3.2" height="9"   rx="0.8" fill="currentColor" />
+    <rect x="5.9" y="5" width="3.2" height="9" rx="0.8" fill="currentColor" />
     <rect x="10.8" y="1.5" width="3.2" height="12.5" rx="0.8" fill="currentColor" />
   </svg>
 )
@@ -27,9 +27,9 @@ const IconOrders = () => (
   <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
     <rect x="2" y="1.5" width="11" height="12" rx="1.5"
       stroke="currentColor" strokeWidth="1.3" />
-    <line x1="4.5" y1="5"  x2="10.5" y2="5"  stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <line x1="4.5" y1="5" x2="10.5" y2="5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     <line x1="4.5" y1="7.5" x2="10.5" y2="7.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    <line x1="4.5" y1="10" x2="8"    y2="10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    <line x1="4.5" y1="10" x2="8" y2="10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
   </svg>
 )
 
@@ -75,14 +75,31 @@ const IconUsers = () => (
   </svg>
 )
 
+const IconRecon = () => (
+  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+    <path d="M7.5 1.5L2 7.5L7.5 13.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    <path d="M7.5 1.5L13 7.5L7.5 13.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    <line x1="2" y1="7.5" x2="13" y2="7.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+  </svg>
+)
+
+const IconPortfolio = () => (
+  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
+    <polyline points="1,13 4,9 7,10 10,5 14,2" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    <polyline points="10,2 14,2 14,5" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+)
+
 const NAV_ICONS = {
   dashboard: <IconDashboard />,
-  orders:    <IconOrders />,
-  bulk:      <IconBulk />,
-  funds:     <IconFunds />,
-  accounts:  <IconAccounts />,
-  users:     <IconUsers />,
+  orders: <IconOrders />,
+  bulk: <IconBulk />,
+  funds: <IconFunds />,
+  accounts: <IconAccounts />,
+  users: <IconUsers />,
   aggregateFunds: <IconFunds />,
+  reconciliation: <IconRecon />,
+  portfolio: <IconPortfolio />,
 }
 
 /* ─── Toast ──────────────────────────────────────────────────────────────────── */
@@ -97,8 +114,8 @@ function Toast({ message, type, onClose }) {
 /* ─── Sidebar ────────────────────────────────────────────────────────────────── */
 export default function Sidebar() {
   const [loadingConfirm, setLoadingConfirm] = useState(false)
-  const [loadingBook, setLoadingBook]       = useState(false)
-  const [toast, setToast]                   = useState(null)
+  const [loadingBook, setLoadingBook] = useState(false)
+  const [toast, setToast] = useState(null)
 
   const showToast = (message, type) => {
     setToast({ message, type })

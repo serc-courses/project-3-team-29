@@ -17,3 +17,7 @@ export async function getFunds() {
     orderSides: aggMap[f.fundID]?.orderSides ?? {},
   }))
 }
+
+export function updateFundNav(fundID, nav) {
+  return api.post('/funds/nav', { fundID, nav })
+}

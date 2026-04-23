@@ -14,6 +14,7 @@ import PlaceOrder from './pages/PlaceOrder/PlaceOrder'
 import Funds from './pages/Funds/Funds'
 import FundDetail from './pages/FundDetail/FundDetail'
 import Account from './pages/Account/Account'
+import Portfolio from './pages/Portfolio/Portfolio'
 import AdvisorHome from './pages/AdvisorHome/AdvisorHome'
 import AdvisorClients from './pages/AdvisorClients/AdvisorClients'
 import AdvisorClientDetail from './pages/AdvisorClientDetail/AdvisorClientDetail'
@@ -47,6 +48,7 @@ function AppContent() {
           <Route path="/orders/:orderId" element={<ProtectedRoute><OrderDetail sseEventCount={eventCount} /></ProtectedRoute>} />
           <Route path="/funds" element={<ProtectedRoute><Funds /></ProtectedRoute>} />
           <Route path="/funds/:fundId" element={<ProtectedRoute><FundDetail /></ProtectedRoute>} />
+          <Route path="/portfolio" element={<ProtectedRoute><Portfolio sseEventCount={eventCount} /></ProtectedRoute>} />
           <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
 
           {/* Advisor routes */}

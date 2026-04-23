@@ -16,7 +16,7 @@ public final class PostgresSchemaInitializer {
 
     public static void initialize(PostgresConnectionFactory connectionFactory, boolean cleanStart) {
         try (Connection connection = connectionFactory.getConnection();
-             Statement statement = connection.createStatement()) {
+                Statement statement = connection.createStatement()) {
             for (String ddl : schemaStatements()) {
                 statement.execute(ddl);
             }
@@ -86,7 +86,8 @@ public final class PostgresSchemaInitializer {
                 + "bulk_nav NUMERIC(20, 8)"
                 + ")");
 
-        statements.add("ALTER TABLE bulk_orders ADD COLUMN IF NOT EXISTS bulk_order_status VARCHAR(32) NOT NULL DEFAULT 'BULKED'");
+        statements.add(
+                "ALTER TABLE bulk_orders ADD COLUMN IF NOT EXISTS bulk_order_status VARCHAR(32) NOT NULL DEFAULT 'BULKED'");
         statements.add("ALTER TABLE bulk_orders ADD COLUMN IF NOT EXISTS transfer_agent VARCHAR(16)");
         statements.add("ALTER TABLE bulk_orders ADD COLUMN IF NOT EXISTS transmission_ref VARCHAR(128)");
         statements.add("ALTER TABLE bulk_orders ADD COLUMN IF NOT EXISTS contract_ref VARCHAR(128)");
@@ -131,6 +132,17 @@ public final class PostgresSchemaInitializer {
                 + "PRIMARY KEY (advisor_id, account_id)"
                 + ")");
 
+        statements.add("CREATE TABLE IF NOT EXISTS reconciliation_breaks ("
+                + "break_id VARCHAR(64) PRIMARY KEY,"
+                + "bulk_order_id VARCHAR(64),"
+                + "break_type VARCHAR(32),"
+                + "expected_value VARCHAR(255),"
+                + "received_value VARCHAR(255),"
+                + "detected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+                + "resolved BOOLEAN DEFAULT FALSE,"
+                + "escalated BOOLEAN DEFAULT FALSE"
+                + ")");
+
         return statements;
     }
 
@@ -146,6 +158,7 @@ public final class PostgresSchemaInitializer {
         statements.add("TRUNCATE TABLE advisor_client_relationships CASCADE");
         statements.add("TRUNCATE TABLE advisors CASCADE");
         statements.add("TRUNCATE TABLE accounts CASCADE");
+        statements.add("TRUNCATE TABLE reconciliation_breaks CASCADE");
         return statements;
     }
 }

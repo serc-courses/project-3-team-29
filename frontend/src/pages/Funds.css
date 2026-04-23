@@ -11,11 +11,17 @@
   grid-template-columns: repeat(3, 1fr);
   gap: var(--spacing-4);
 }
+
 @media (max-width: 1024px) {
-  .funds-grid { grid-template-columns: repeat(2, 1fr); }
+  .funds-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
+
 @media (max-width: 600px) {
-  .funds-grid { grid-template-columns: 1fr; }
+  .funds-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Fund card */
@@ -31,8 +37,9 @@
   color: inherit;
   box-shadow: var(--shadow-3);
 }
+
 .fund-card:hover {
-  box-shadow: rgba(50,50,93,0.30) 0px 30px 45px -30px, rgba(0,0,0,0.12) 0px 18px 36px -18px;
+  box-shadow: rgba(50, 50, 93, 0.30) 0px 30px 45px -30px, rgba(0, 0, 0, 0.12) 0px 18px 36px -18px;
   transform: translateY(-3px);
 }
 
@@ -44,6 +51,7 @@
   color: var(--color-gray-400);
   margin-bottom: 4px;
 }
+
 .fund-card-name {
   font-size: 0.875rem;
   font-weight: 400;
@@ -52,6 +60,7 @@
   margin-bottom: var(--spacing-3);
   line-height: 1.4;
 }
+
 .fund-card-nav {
   font-family: var(--font-sans);
   font-size: 1.5rem;
@@ -68,16 +77,19 @@
   background: var(--color-gray-100);
   margin-bottom: var(--spacing-3);
 }
+
 .fund-card-stats {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2);
 }
+
 .fund-stat-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
+
 .fund-stat-label {
   font-size: var(--text-micro);
   font-weight: 400;
@@ -86,6 +98,7 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
 .fund-stat-value {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -95,7 +108,11 @@
 }
 
 /* BUY/SELL mini badges */
-.fund-side-badges { display: flex; gap: var(--spacing-2); }
+.fund-side-badges {
+  display: flex;
+  gap: var(--spacing-2);
+}
+
 .fund-side-badge {
   font-size: var(--text-micro);
   font-weight: 400;
@@ -104,15 +121,17 @@
   border-radius: var(--radius-sm);
   border: 1px solid;
 }
-.fund-side-badge.buy  {
-  background: rgba(21,190,83,0.12);
+
+.fund-side-badge.buy {
+  background: rgba(21, 190, 83, 0.12);
   color: var(--color-success-text);
-  border-color: rgba(21,190,83,0.3);
+  border-color: rgba(21, 190, 83, 0.3);
 }
+
 .fund-side-badge.sell {
-  background: rgba(234,34,97,0.08);
+  background: rgba(234, 34, 97, 0.08);
   color: var(--color-error);
-  border-color: rgba(234,34,97,0.25);
+  border-color: rgba(234, 34, 97, 0.25);
 }
 
 /* States */
@@ -126,18 +145,215 @@
   font-size: 0.875rem;
   font-feature-settings: "ss01";
 }
+
 .funds-error {
   padding: var(--spacing-4);
-  background: rgba(234,34,97,0.06);
-  border: 1px solid rgba(234,34,97,0.25);
+  background: rgba(234, 34, 97, 0.06);
+  border: 1px solid rgba(234, 34, 97, 0.25);
   border-radius: var(--radius-sm);
   color: var(--color-error);
   font-size: 0.875rem;
 }
+
 .funds-empty {
   text-align: center;
   padding: var(--spacing-8);
   color: var(--color-gray-400);
   font-size: 0.875rem;
   font-feature-settings: "ss01";
+}
+
+/* ── NAV Edit button ── */
+.nav-edit-btn {
+  background: none;
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 14px;
+  margin-left: 8px;
+  transition: background var(--transition-normal);
+  vertical-align: middle;
+}
+
+.nav-edit-btn:hover {
+  background: var(--color-gray-100);
+}
+
+/* ── NAV Modal ── */
+.nav-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.15s ease;
+}
+
+.nav-modal {
+  background: #fff;
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-6);
+  max-width: 420px;
+  width: 90%;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.2);
+  animation: slideUp 0.2s ease;
+}
+
+.nav-modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-gray-900);
+  margin-bottom: 4px;
+}
+
+.nav-modal-sub {
+  font-size: 0.8125rem;
+  color: var(--color-gray-500);
+  margin-bottom: var(--spacing-4);
+  font-family: var(--font-mono);
+}
+
+.nav-modal-current {
+  font-size: 0.875rem;
+  color: var(--color-gray-700);
+  margin-bottom: var(--spacing-4);
+  padding: var(--spacing-3);
+  background: var(--color-gray-50);
+  border-radius: var(--radius-sm);
+}
+
+.nav-modal-input-group {
+  margin-bottom: var(--spacing-4);
+}
+
+.nav-modal-input-group label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-gray-500);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+
+.nav-modal-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 1.125rem;
+  font-family: var(--font-mono);
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color var(--transition-normal);
+  box-sizing: border-box;
+}
+
+.nav-modal-input:focus {
+  border-color: var(--color-primary-500);
+}
+
+.nav-modal-actions {
+  display: flex;
+  gap: var(--spacing-3);
+  justify-content: flex-end;
+}
+
+.nav-modal-cancel {
+  padding: 8px 16px;
+  border: 1px solid var(--color-gray-200);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--color-gray-700);
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.nav-modal-confirm {
+  padding: 8px 20px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-600);
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.nav-modal-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.nav-modal-hint {
+  font-size: 0.6875rem;
+  color: var(--color-gray-400);
+  margin-top: var(--spacing-3);
+  text-align: center;
+}
+
+.nav-modal-hint code {
+  background: var(--color-gray-100);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: inherit;
+}
+
+/* ── Toast ── */
+.nav-toast {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  padding: 12px 20px;
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  z-index: 1100;
+  animation: slideIn 0.25s ease;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.12);
+}
+
+.nav-toast-success {
+  background: #059669;
+  color: #fff;
+}
+
+.nav-toast-error {
+  background: #DC2626;
+  color: #fff;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(40px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }

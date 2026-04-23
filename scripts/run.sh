@@ -33,6 +33,7 @@ ADMIN_PID=$!
 (cd "$ROOT/user-frontend" && npm run dev 2>&1 | sed 's/^/[user]    /') &
 USER_PID=$!
 
+export OMS_DB_CLEAN_START="true"
 # Start backend (foreground so its logs are visible)
 echo "[backend] Compiling and starting Java backend..."
 (cd "$ROOT" && mvn -q compile exec:java -Dexec.mainClass="com.iiit.oms.OmsApplication" 2>&1 | sed 's/^/[backend] /') &

@@ -49,10 +49,17 @@ import com.iiit.oms.util.AccountMockDataUtil;
 import com.iiit.oms.util.AdvisorMockDataUtil;
 import com.iiit.oms.util.FundMockDataUtil;
 import com.iiit.oms.util.UserSeedDataUtil;
+import com.iiit.oms.db.postgres.PostgresReconciliationBreakDatabase;
+import com.iiit.oms.repository.postgres.PostgresReconciliationBreakRepository;
 
 import java.io.IOException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Logger;
 
 public class OmsApplication {
+    private static final Logger LOGGER = Logger.getLogger(OmsApplication.class.getName());
     private static final int SERVER_PORT = 8080;
     private static final String CLEAN_START_ENV_VAR = "OMS_DB_CLEAN_START";
     private static final String CQRS_USE_MONGO_ENV_VAR = "OMS_CQRS_USE_MONGO";
@@ -60,41 +67,48 @@ public class OmsApplication {
     private static final String CQRS_MONGO_DB_ENV_VAR = "OMS_MONGO_DB";
 
     public static void main(String[] args) throws IOException {
-        // Fix: PostgreSQL rejects legacy JVM timezone "Asia/Calcutta" — normalise to UTC
+        // Fix: PostgreSQL rejects legacy JVM timezone "Asia/Calcutta" — normalise to
+        // UTC
         java.util.TimeZone.setDefault(java.util.TimeZone.getTimeZone("UTC"));
 
         PostgresConnectionFactory connectionFactory = PostgresConnectionFactory.fromEnvironment();
         boolean cleanStart = isEnabled(CLEAN_START_ENV_VAR);
         PostgresSchemaInitializer.initialize(connectionFactory, cleanStart);
 
-        AccountRepository accountRepository = new PostgresAccountRepository(new PostgresAccountDatabase(connectionFactory));
+        AccountRepository accountRepository = new PostgresAccountRepository(
+                new PostgresAccountDatabase(connectionFactory));
         seedAccountsIfMissing(accountRepository);
 
         FundRepository fundRepository = new PostgresFundRepository(new PostgresFundDatabase(connectionFactory));
         seedFundsIfMissing(fundRepository);
 
-        AdvisorRepository advisorRepository = new PostgresAdvisorRepository(new PostgresAdvisorDatabase(connectionFactory));
-        AdvisorClientRelationshipRepository relationshipRepository =
-                new PostgresAdvisorClientRelationshipRepository(new PostgresAdvisorClientRelationshipDatabase(connectionFactory));
+        AdvisorRepository advisorRepository = new PostgresAdvisorRepository(
+                new PostgresAdvisorDatabase(connectionFactory));
+        AdvisorClientRelationshipRepository relationshipRepository = new PostgresAdvisorClientRelationshipRepository(
+                new PostgresAdvisorClientRelationshipDatabase(connectionFactory));
         AdvisorMockDataUtil.seedIfMissing(advisorRepository, relationshipRepository);
 
         UserRepository userRepository = new InMemoryUserRepository();
         UserSeedDataUtil.seedIfMissing(userRepository);
 
         OrderRepository orderRepository = new PostgresOrderRepository(new PostgresOrderDatabase(connectionFactory));
-        OrderStateMachine orderStateMachine = new OrderStateMachine(new OrderManager(accountRepository, fundRepository));
+        OrderStateMachine orderStateMachine = new OrderStateMachine(
+                new OrderManager(accountRepository, fundRepository, orderRepository));
         OrderScheduler orderScheduler = new OrderScheduler(orderRepository, orderStateMachine);
 
         ProjectionStore projectionStore = createProjectionStore();
         OrderProjectionListener projectionListener = new DefaultOrderProjectionListener(projectionStore);
 
-        PostgresBulkOrderMappingRepository bulkOrderMappingRepository = new PostgresBulkOrderMappingRepository(new PostgresBulkOrderMappingDatabase(connectionFactory));
-        BulkOrderRepository bulkOrderRepository = new PostgresBulkOrderRepository(new PostgresBulkOrderDatabase(connectionFactory));
+        PostgresBulkOrderMappingRepository bulkOrderMappingRepository = new PostgresBulkOrderMappingRepository(
+                new PostgresBulkOrderMappingDatabase(connectionFactory));
+        BulkOrderRepository bulkOrderRepository = new PostgresBulkOrderRepository(
+                new PostgresBulkOrderDatabase(connectionFactory));
         PostgresAuditLogDatabase auditLogDatabase = new PostgresAuditLogDatabase(connectionFactory);
         PostgresAuditLogRepository auditLogRepository = new PostgresAuditLogRepository(auditLogDatabase);
 
         // Replay existing orders from DB into in-memory projection store on startup
-        replayProjections(projectionStore, orderRepository, bulkOrderRepository, bulkOrderMappingRepository, fundRepository);
+        replayProjections(projectionStore, orderRepository, bulkOrderRepository, bulkOrderMappingRepository,
+                fundRepository);
 
         // Wire audit log into state machine
         orderStateMachine.setAuditLogRepository(auditLogRepository);
@@ -123,15 +137,20 @@ public class OmsApplication {
             System.out.println("Idempotency store: InMemory (Redis unavailable)");
         }
 
-        BatchoutScheduler batchoutScheduler = new BatchoutScheduler(orderRepository, bulkOrderMappingRepository, bulkOrderRepository, fundRepository, projectionListener);
+        BatchoutScheduler batchoutScheduler = new BatchoutScheduler(orderRepository, bulkOrderMappingRepository,
+                bulkOrderRepository, fundRepository, projectionListener);
         batchoutScheduler.setTransferAgentRouter(transferAgentRouter);
         batchoutScheduler.setAuditLogRepository(auditLogRepository);
         // Wire Redis pool for outbound bulk dedup
         try {
             redis.clients.jedis.JedisPoolConfig poolCfg = new redis.clients.jedis.JedisPoolConfig();
-            poolCfg.setMaxTotal(4); poolCfg.setMaxIdle(1);
-            redis.clients.jedis.JedisPool sharedPool = new redis.clients.jedis.JedisPool(poolCfg, redisHost, redisPort, 1000);
-            try (redis.clients.jedis.Jedis j = sharedPool.getResource()) { j.ping(); }
+            poolCfg.setMaxTotal(4);
+            poolCfg.setMaxIdle(1);
+            redis.clients.jedis.JedisPool sharedPool = new redis.clients.jedis.JedisPool(poolCfg, redisHost, redisPort,
+                    1000);
+            try (redis.clients.jedis.Jedis j = sharedPool.getResource()) {
+                j.ping();
+            }
             batchoutScheduler.setJedisPool(sharedPool);
             System.out.println("BatchoutScheduler: Redis dedup pool connected");
         } catch (Exception e) {
@@ -139,23 +158,50 @@ public class OmsApplication {
         }
 
         OrderRestServer orderRestServer = new OrderRestServer(
-            SERVER_PORT,
-            orderRepository,
-            bulkOrderRepository,
-            bulkOrderMappingRepository,
-            fundRepository,
-            orderStateMachine,
-            projectionStore,
-            projectionListener,
-            accountRepository,
-            advisorRepository,
-            relationshipRepository,
-            userRepository
-        );
+                SERVER_PORT,
+                orderRepository,
+                bulkOrderRepository,
+                bulkOrderMappingRepository,
+                fundRepository,
+                orderStateMachine,
+                projectionStore,
+                projectionListener,
+                accountRepository,
+                advisorRepository,
+                relationshipRepository,
+                userRepository);
 
         orderRestServer.start();
         orderRestServer.setIdempotencyStore(idempotencyStore);
         orderRestServer.setAuditLogRepository(auditLogRepository);
+        orderRestServer.setKafkaPublisher(kafkaPublisher);
+
+        // ---- Reconciliation Engine ----
+        PostgresReconciliationBreakDatabase reconBreakDb = new PostgresReconciliationBreakDatabase(connectionFactory);
+        PostgresReconciliationBreakRepository reconBreakRepository = new PostgresReconciliationBreakRepository(
+                reconBreakDb);
+        orderRestServer.setReconciliationBreakRepository(reconBreakRepository);
+
+        // Scheduled job: escalate unresolved breaks older than 1 hour, runs every 60
+        // seconds
+        ScheduledExecutorService reconEscalationScheduler = Executors.newSingleThreadScheduledExecutor();
+        reconEscalationScheduler.scheduleAtFixedRate(() -> {
+            try {
+                java.util.List<com.iiit.oms.model.ReconciliationBreak> staleBreaks = reconBreakRepository
+                        .findUnresolvedOlderThan(3600); // 1 hour
+                for (com.iiit.oms.model.ReconciliationBreak b : staleBreaks) {
+                    reconBreakRepository.markEscalated(b.getBreakId());
+                    LOGGER.warning("Reconciliation break " + b.getBreakId()
+                            + " escalated (unresolved >1h, bulk=" + b.getBulkOrderId() + ")");
+                }
+                if (!staleBreaks.isEmpty()) {
+                    LOGGER.info("Reconciliation escalation sweep: escalated " + staleBreaks.size() + " break(s)");
+                }
+            } catch (Exception ex) {
+                LOGGER.severe("Reconciliation escalation sweep failed: " + ex.getMessage());
+            }
+        }, 60, 60, TimeUnit.SECONDS);
+
         // Wire Redis session store so sessions survive restarts
         try {
             orderRestServer.setSessionStore(new com.iiit.oms.auth.RedisSessionStore(redisHost, redisPort));
@@ -190,6 +236,7 @@ public class OmsApplication {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             orderScheduler.shutdown();
             batchoutScheduler.shutdown();
+            reconEscalationScheduler.shutdownNow();
             orderRestServer.stop(0);
             if (projectionStore instanceof MongoDbProjectionStore) {
                 ((MongoDbProjectionStore) projectionStore).close();
@@ -199,8 +246,10 @@ public class OmsApplication {
         System.out.println("OmsApplication started on http://localhost:" + SERVER_PORT);
         System.out.println("OrderScheduler started with 30 second interval");
         System.out.println("BatchoutScheduler started with 120 second interval");
-        System.out.println("Postgres DB bootstrap complete (set OMS_DB_URL/OMS_DB_USER/OMS_DB_PASSWORD to override defaults)");
-        System.out.println("Postgres clean start: " + cleanStart + " (set " + CLEAN_START_ENV_VAR + "=true to wipe tables on startup)");
+        System.out.println(
+                "Postgres DB bootstrap complete (set OMS_DB_URL/OMS_DB_USER/OMS_DB_PASSWORD to override defaults)");
+        System.out.println("Postgres clean start: " + cleanStart + " (set " + CLEAN_START_ENV_VAR
+                + "=true to wipe tables on startup)");
         System.out.println("Seeded default accounts count: " + accountRepository.findAll().size());
         System.out.println("Seeded default funds count: " + fundRepository.findAll().size());
         System.out.println("Seeded advisors count: " + advisorRepository.findAll().size());
@@ -213,6 +262,9 @@ public class OmsApplication {
         System.out.println("  POST /orders/confirm          - Confirm BULKED/TRANSMITTED bulk orders");
         System.out.println("  POST /orders/book             - Book CONFIRMED bulk orders");
         System.out.println("  POST /transfer-agent/contract - Simulate TA contract callback (NAV + shares)");
+        System.out.println("  GET  /view/reconciliation     - View reconciliation breaks");
+        System.out.println("  POST /view/reconciliation/resolve - Resolve a reconciliation break (ACCEPT/REJECT)");
+        System.out.println("  GET  /view/portfolio          - Portfolio P/L for BOOKED orders");
         System.out.println("  GET  /view/orders             - Query projected order read model");
         System.out.println("  GET  /view/bulk-orders        - Query projected bulk-order read model");
         System.out.println("  GET  /view/dashboard          - Dashboard summary");
@@ -266,8 +318,10 @@ public class OmsApplication {
     }
 
     /**
-     * Replay all existing orders/bulk-orders from PostgreSQL into the in-memory projection store.
-     * This ensures the read model is populated after a server restart without a clean-start wipe.
+     * Replay all existing orders/bulk-orders from PostgreSQL into the in-memory
+     * projection store.
+     * This ensures the read model is populated after a server restart without a
+     * clean-start wipe.
      * Only runs for InMemoryProjectionStore (MongoDB persists its own state).
      */
     private static void replayProjections(
@@ -283,8 +337,10 @@ public class OmsApplication {
         int orderCount = 0;
         for (com.iiit.oms.model.Order order : orderRepository.findAll()) {
             try {
-                java.util.Optional<com.iiit.oms.model.Fund> maybeFund = fundRepository.findByFundId(order.getProductID());
-                if (maybeFund.isEmpty()) continue;
+                java.util.Optional<com.iiit.oms.model.Fund> maybeFund = fundRepository
+                        .findByFundId(order.getProductID());
+                if (maybeFund.isEmpty())
+                    continue;
                 com.iiit.oms.model.Fund fund = maybeFund.get();
                 String bulkOrderID = null;
                 com.iiit.oms.model.BulkOrder bulkOrder = null;
@@ -309,7 +365,8 @@ public class OmsApplication {
         for (com.iiit.oms.model.BulkOrder bo : bulkOrderRepository.findAll()) {
             try {
                 java.util.Optional<com.iiit.oms.model.Fund> maybeFund = fundRepository.findByFundId(bo.getProductID());
-                if (maybeFund.isEmpty()) continue;
+                if (maybeFund.isEmpty())
+                    continue;
                 java.util.List<String> ids = bulkOrderMappingRepository
                         .findIndividualOrderIds(bo.getOrderID()).orElse(java.util.List.of());
                 projectionStore.projectBulkOrder(bo, maybeFund.get(), ids);

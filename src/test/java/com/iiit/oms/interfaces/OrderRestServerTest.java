@@ -115,7 +115,8 @@ class OrderRestServerTest {
         server.start();
 
         try {
-            Order order = new Order("ORD300", "FND001", java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(100), "ACCT00001", OrderSide.BUY, OrderStatus.ERRORED, false);
+            Order order = new Order("ORD300", "FND001", java.math.BigDecimal.TEN, java.math.BigDecimal.valueOf(100),
+                    "ACCT00001", OrderSide.BUY, OrderStatus.ERRORED, false);
             order.setErrorDescription("Account ID ACCT99999 does not exist");
             repository.save(order);
 
@@ -138,7 +139,8 @@ class OrderRestServerTest {
         server.start();
 
         try {
-            Order order = new Order("ORD301", "FND001", java.math.BigDecimal.ONE, java.math.BigDecimal.valueOf(100), "ACCT00001", OrderSide.BUY, OrderStatus.BULKED, false);
+            Order order = new Order("ORD301", "FND001", java.math.BigDecimal.ONE, java.math.BigDecimal.valueOf(100),
+                    "ACCT00001", OrderSide.BUY, OrderStatus.BULKED, false);
             repository.save(order);
 
             HttpResponse<String> response = getOrderStatus(server.getPort(), "ORD301");
@@ -197,16 +199,18 @@ class OrderRestServerTest {
         OrderStateMachine stateMachine = new OrderStateMachine(
                 new OrderManager(
                         new InMemoryAccountRepository(new InMemoryAccountDatabase()),
-                        new InMemoryFundRepository(new InMemoryFundDatabase())
-                )
-        );
+                        new InMemoryFundRepository(new InMemoryFundDatabase()),
+                        orderRepository));
 
-        OrderRestServer server = new OrderRestServer(0, orderRepository, bulkOrderRepository, mappingRepository, stateMachine);
+        OrderRestServer server = new OrderRestServer(0, orderRepository, bulkOrderRepository, mappingRepository,
+                stateMachine);
         server.start();
 
         try {
-            Order order1 = new Order("ORD500", "FND001", java.math.BigDecimal.ONE, java.math.BigDecimal.TEN, "ACCT00001", OrderSide.BUY, OrderStatus.BULKED, true);
-            Order order2 = new Order("ORD501", "FND001", java.math.BigDecimal.ONE, java.math.BigDecimal.TEN, "ACCT00002", OrderSide.BUY, OrderStatus.BULKED, true);
+            Order order1 = new Order("ORD500", "FND001", java.math.BigDecimal.ONE, java.math.BigDecimal.TEN,
+                    "ACCT00001", OrderSide.BUY, OrderStatus.BULKED, true);
+            Order order2 = new Order("ORD501", "FND001", java.math.BigDecimal.ONE, java.math.BigDecimal.TEN,
+                    "ACCT00002", OrderSide.BUY, OrderStatus.BULKED, true);
             orderRepository.save(order1);
             orderRepository.save(order2);
 
@@ -217,8 +221,7 @@ class OrderRestServerTest {
                     BulkOrderStatus.BULKED,
                     java.math.BigDecimal.valueOf(2),
                     java.math.BigDecimal.valueOf(20),
-                    "FIRMACCT"
-            );
+                    "FIRMACCT");
             bulkOrderRepository.save(bulkOrder);
             mappingRepository.save("BLK500", java.util.List.of("ORD500", "ORD501"));
 
@@ -230,7 +233,8 @@ class OrderRestServerTest {
 
             assertEquals(OrderStatus.CONFIRMED, orderRepository.findByOrderId("ORD500").orElseThrow().getOrderStatus());
             assertEquals(OrderStatus.CONFIRMED, orderRepository.findByOrderId("ORD501").orElseThrow().getOrderStatus());
-            assertEquals(BulkOrderStatus.CONFIRMED, bulkOrderRepository.findByOrderId("BLK500").orElseThrow().getBulkOrderStatus());
+            assertEquals(BulkOrderStatus.CONFIRMED,
+                    bulkOrderRepository.findByOrderId("BLK500").orElseThrow().getBulkOrderStatus());
         } finally {
             server.stop(0);
         }
@@ -269,16 +273,18 @@ class OrderRestServerTest {
         OrderStateMachine stateMachine = new OrderStateMachine(
                 new OrderManager(
                         new InMemoryAccountRepository(new InMemoryAccountDatabase()),
-                        fundRepository
-                )
-        );
+                        fundRepository,
+                        orderRepository));
 
-        OrderRestServer server = new OrderRestServer(0, orderRepository, bulkOrderRepository, mappingRepository, fundRepository, stateMachine);
+        OrderRestServer server = new OrderRestServer(0, orderRepository, bulkOrderRepository, mappingRepository,
+                fundRepository, stateMachine);
         server.start();
 
         try {
-            Order order1 = new Order("ORD700", "FND001", null, BigDecimal.valueOf(5), "ACCT00001", OrderSide.BUY, OrderStatus.CONFIRMED, true);
-            Order order2 = new Order("ORD701", "FND001", null, BigDecimal.valueOf(15), "ACCT00002", OrderSide.BUY, OrderStatus.CONFIRMED, true);
+            Order order1 = new Order("ORD700", "FND001", null, BigDecimal.valueOf(5), "ACCT00001", OrderSide.BUY,
+                    OrderStatus.CONFIRMED, true);
+            Order order2 = new Order("ORD701", "FND001", null, BigDecimal.valueOf(15), "ACCT00002", OrderSide.BUY,
+                    OrderStatus.CONFIRMED, true);
             orderRepository.save(order1);
             orderRepository.save(order2);
 
@@ -289,8 +295,7 @@ class OrderRestServerTest {
                     BulkOrderStatus.CONFIRMED,
                     BigDecimal.ZERO,
                     BigDecimal.valueOf(20),
-                    "FIRMACCT"
-            );
+                    "FIRMACCT");
             bulkOrderRepository.save(bulkOrder);
             mappingRepository.save("BLK700", java.util.List.of("ORD700", "ORD701"));
 
@@ -351,8 +356,7 @@ class OrderRestServerTest {
                 fundRepository,
                 null,
                 projectionStore,
-                projectionListener
-        );
+                projectionListener);
         server.start();
 
         try {
@@ -392,8 +396,7 @@ class OrderRestServerTest {
                 fundRepository,
                 null,
                 projectionStore,
-                projectionListener
-        );
+                projectionListener);
         server.start();
 
         try {
@@ -436,8 +439,7 @@ class OrderRestServerTest {
                 fundRepository,
                 null,
                 projectionStore,
-                projectionListener
-        );
+                projectionListener);
         server.start();
 
         try {
@@ -475,8 +477,10 @@ class OrderRestServerTest {
         FundRepository fundRepository = new InMemoryFundRepository(fundDatabase);
         fundRepository.save(new Fund("FND001", "Fund 1", "Family", BigDecimal.TEN));
 
-        orderRepository.save(new Order("ORD930", "FND001", BigDecimal.ONE, BigDecimal.valueOf(10), "ACCT00001", OrderSide.BUY, OrderStatus.BOOKED, true));
-        bulkOrderRepository.save(new BulkOrder("BLK930", "FND001", OrderSide.BUY, BulkOrderStatus.BOOKED, BigDecimal.ONE, BigDecimal.valueOf(10), "FIRMACCT"));
+        orderRepository.save(new Order("ORD930", "FND001", BigDecimal.ONE, BigDecimal.valueOf(10), "ACCT00001",
+                OrderSide.BUY, OrderStatus.BOOKED, true));
+        bulkOrderRepository.save(new BulkOrder("BLK930", "FND001", OrderSide.BUY, BulkOrderStatus.BOOKED,
+                BigDecimal.ONE, BigDecimal.valueOf(10), "FIRMACCT"));
         mappingRepository.save("BLK930", List.of("ORD930"));
 
         ProjectionStore projectionStore = new InMemoryProjectionStore();
@@ -490,8 +494,7 @@ class OrderRestServerTest {
                 fundRepository,
                 null,
                 projectionStore,
-                projectionListener
-        );
+                projectionListener);
         server.start();
 
         try {

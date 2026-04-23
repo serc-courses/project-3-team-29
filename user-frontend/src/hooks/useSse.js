@@ -40,6 +40,10 @@ export function useSse() {
       setEventCount(c => c + 1)
       pushAlert('replay-completed')
     })
+    es.addEventListener('nav-updated', () => {
+      setEventCount(c => c + 1)
+      pushAlert('nav-updated')
+    })
 
     es.onerror = () => {
       setConnected(false)

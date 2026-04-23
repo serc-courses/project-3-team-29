@@ -20,21 +20,22 @@ import java.util.logging.Logger;
  * the core OMS flow continues unaffected.
  *
  * Topics:
- *  - oms.orders.planned    – new order received
- *  - oms.orders.state      – any order status change
- *  - oms.bulk.created      – new bulk order created
- *  - oms.bulk.transmitted  – bulk order transmitted to TA
- *  - oms.orders.booked     – order reached terminal BOOKED state
+ * - oms.orders.planned – new order received
+ * - oms.orders.state – any order status change
+ * - oms.bulk.created – new bulk order created
+ * - oms.bulk.transmitted – bulk order transmitted to TA
+ * - oms.orders.booked – order reached terminal BOOKED state
  */
 public class KafkaOrderEventPublisher {
     private static final Logger LOGGER = Logger.getLogger(KafkaOrderEventPublisher.class.getName());
 
-    public static final String TOPIC_ORDER_PLANNED    = "oms.orders.planned";
-    public static final String TOPIC_ORDER_STATE      = "oms.orders.state";
-    public static final String TOPIC_BULK_CREATED     = "oms.bulk.created";
+    public static final String TOPIC_ORDER_PLANNED = "oms.orders.planned";
+    public static final String TOPIC_ORDER_STATE = "oms.orders.state";
+    public static final String TOPIC_BULK_CREATED = "oms.bulk.created";
     public static final String TOPIC_BULK_TRANSMITTED = "oms.bulk.transmitted";
-    public static final String TOPIC_ORDER_BOOKED     = "oms.orders.booked";
-    public static final String TOPIC_ORDER_RECEIVED   = "oms.orders.received";
+    public static final String TOPIC_ORDER_BOOKED = "oms.orders.booked";
+    public static final String TOPIC_ORDER_RECEIVED = "oms.orders.received";
+    public static final String TOPIC_NAV_UPDATED = "oms.nav.updated";
 
     private final KafkaProducer<String, String> producer;
     private final ObjectMapper objectMapper;
@@ -56,7 +57,8 @@ public class KafkaOrderEventPublisher {
             ok = true;
             LOGGER.info("Kafka producer initialized at " + bootstrapServers);
         } catch (Exception ex) {
-            LOGGER.warning("Kafka not available at " + bootstrapServers + " – event publishing disabled: " + ex.getMessage());
+            LOGGER.warning(
+                    "Kafka not available at " + bootstrapServers + " – event publishing disabled: " + ex.getMessage());
         }
         this.producer = p;
         this.enabled = ok;
@@ -100,6 +102,22 @@ public class KafkaOrderEventPublisher {
         publish(TOPIC_ORDER_RECEIVED, order.getOrderID(), m);
     }
 
+    /**
+     * Publish a NAV update event so all consumers (audit log, notification, etc.)
+     * know that a fund's NAV was changed by an admin.
+     */
+    public void publishNavUpdated(String fundID, String fundName, java.math.BigDecimal oldNav,
+            java.math.BigDecimal newNav) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("eventType", "NAV_UPDATED");
+        m.put("fundID", fundID);
+        m.put("fundName", fundName);
+        m.put("oldNav", oldNav);
+        m.put("newNav", newNav);
+        m.put("timestamp", Instant.now().toString());
+        publish(TOPIC_NAV_UPDATED, fundID, m);
+    }
+
     private Map<String, Object> orderEvent(String eventType, Order order) {
         Map<String, Object> m = new HashMap<>();
         m.put("eventType", eventType);
@@ -128,7 +146,8 @@ public class KafkaOrderEventPublisher {
     }
 
     private void publish(String topic, String key, Map<String, Object> payload) {
-        if (!enabled || producer == null) return;
+        if (!enabled || producer == null)
+            return;
         try {
             String value = objectMapper.writeValueAsString(payload);
             producer.send(new ProducerRecord<>(topic, key, value), (meta, ex) -> {
@@ -141,11 +160,16 @@ public class KafkaOrderEventPublisher {
         }
     }
 
-    public boolean isEnabled() { return enabled; }
+    public boolean isEnabled() {
+        return enabled;
+    }
 
     public void close() {
         if (producer != null) {
-            try { producer.close(); } catch (Exception ignored) { }
+            try {
+                producer.close();
+            } catch (Exception ignored) {
+            }
         }
     }
 }

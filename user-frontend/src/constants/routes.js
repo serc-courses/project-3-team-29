@@ -6,6 +6,7 @@ export const ROUTES = {
   FUNDS: '/funds',
   FUND_DETAIL: '/funds/:fundId',
   ACCOUNT: '/account',
+  PORTFOLIO: '/portfolio',
   ADVISOR_HOME: '/advisor',
   ADVISOR_CLIENTS: '/advisor/clients',
   ADVISOR_CLIENT_DETAIL: '/advisor/clients/:accountId',
@@ -18,5 +19,6 @@ export const TAB_ITEMS = [
   { label: 'Home', path: ROUTES.HOME, icon: 'home' },
   { label: 'Orders', path: ROUTES.ORDERS, icon: 'orders' },
   { label: 'Funds', path: ROUTES.FUNDS, icon: 'funds' },
+  { label: 'Portfolio', path: ROUTES.PORTFOLIO, icon: 'portfolio' },
   { label: 'Account', path: ROUTES.ACCOUNT, icon: 'account' },
 ]

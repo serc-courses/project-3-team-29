@@ -12,8 +12,11 @@ const STATUS_OPTIONS = Object.values(BULK_ORDER_STATUS).map((s) => ({ value: s, 
 const SIDE_OPTIONS = Object.values(ORDER_SIDE).map((s) => ({ value: s, label: s }))
 
 function ContractModal({ bulkOrder, onClose, onSuccess }) {
-  const [nav, setNav] = useState('')
-  const [totalShares, setTotalShares] = useState('')
+  const defaultNav = 10.0;
+  const defaultShares = bulkOrder.amount ? (bulkOrder.amount / defaultNav).toFixed(4) : '';
+
+  const [nav, setNav] = useState(defaultNav.toString())
+  const [totalShares, setTotalShares] = useState(defaultShares.toString())
   const [contractRef, setContractRef] = useState(`CTR-${Date.now()}`)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -236,22 +239,22 @@ export default function BulkOrders({ sseEventCount = 0 }) {
           </table>
         </div>
       </div>
-    {contractModal && (
-      <ContractModal
-        bulkOrder={contractModal}
-        onClose={() => setContractModal(null)}
-        onSuccess={(data) => {
-          setContractModal(null)
-          setContractSuccess(`Contract processed! ${data.bookedOrders} orders booked (ref: ${data.contractRef})`)
-          getBulkOrderViews().then(setBulkOrders).catch(() => {})
-        }}
-      />
-    )}
-    {contractSuccess && (
-      <div className="contract-success-toast" onClick={() => setContractSuccess(null)}>
-        ✓ {contractSuccess}
-      </div>
-    )}
+      {contractModal && (
+        <ContractModal
+          bulkOrder={contractModal}
+          onClose={() => setContractModal(null)}
+          onSuccess={(data) => {
+            setContractModal(null)
+            setContractSuccess(`Contract processed! ${data.bookedOrders} orders booked (ref: ${data.contractRef})`)
+            getBulkOrderViews().then(setBulkOrders).catch(() => { })
+          }}
+        />
+      )}
+      {contractSuccess && (
+        <div className="contract-success-toast" onClick={() => setContractSuccess(null)}>
+          ✓ {contractSuccess}
+        </div>
+      )}
     </div>
   )
 }

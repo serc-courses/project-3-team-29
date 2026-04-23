@@ -1,0 +1,332 @@
+.recon-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.recon-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.recon-header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.recon-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.recon-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text-secondary, #888);
+  cursor: pointer;
+}
+
+.recon-refresh-btn {
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border, #333);
+  background: var(--card-bg, #1a1a2e);
+  color: var(--text-primary, #e0e0e0);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.recon-refresh-btn:hover {
+  background: var(--hover-bg, #252540);
+}
+
+/* Info banner */
+.recon-info-banner {
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: rgba(96, 165, 250, 0.08);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  color: var(--text-secondary, #aaa);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.recon-info-banner strong {
+  color: var(--text-primary, #e0e0e0);
+}
+
+.recon-count {
+  font-size: 0.8rem;
+  color: var(--text-secondary, #888);
+}
+
+.recon-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 200px;
+  color: var(--text-secondary, #888);
+}
+
+.recon-error {
+  padding: 24px;
+  text-align: center;
+  color: #f44;
+}
+
+.recon-empty {
+  text-align: center;
+  padding: 48px 16px;
+  border-radius: 12px;
+  background: var(--card-bg, #1a1a2e);
+  border: 1px solid var(--border, #333);
+}
+
+.recon-empty-icon {
+  font-size: 2.5rem;
+  color: #4ade80;
+  margin-bottom: 8px;
+}
+
+.recon-empty-text {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.recon-empty-sub {
+  font-size: 0.82rem;
+  color: var(--text-secondary, #888);
+}
+
+/* Break type badges */
+.break-type {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.break-type-amount_mismatch {
+  background: rgba(255, 100, 100, 0.15);
+  color: #ff6464;
+}
+
+.break-type-fund_mismatch {
+  background: rgba(255, 180, 50, 0.15);
+  color: #ffb432;
+}
+
+/* Diff value */
+.diff-value {
+  color: #ff6464;
+  font-weight: 600;
+}
+
+/* Status badges */
+.recon-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.recon-badge-open {
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
+}
+
+.recon-badge-escalated {
+  background: rgba(255, 100, 100, 0.15);
+  color: #ff6464;
+  animation: pulse-escalated 2s infinite;
+}
+
+.recon-badge-resolved {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
+}
+
+/* Escalated row highlight */
+.escalated-row {
+  background: rgba(255, 100, 100, 0.04) !important;
+}
+
+@keyframes pulse-escalated {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* Action buttons */
+.recon-actions {
+  display: flex;
+  gap: 5px;
+  justify-content: center;
+  flex-wrap: nowrap;
+}
+
+.recon-btn {
+  padding: 4px 10px;
+  border-radius: 5px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.recon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Accept — green */
+.recon-btn-accept {
+  background: rgba(74, 222, 128, 0.12);
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.25);
+}
+
+.recon-btn-accept:hover:not(:disabled) {
+  background: rgba(74, 222, 128, 0.22);
+}
+
+/* Retransmit — amber/yellow */
+.recon-btn-retransmit {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fbbf24;
+  border-color: rgba(251, 191, 36, 0.25);
+}
+
+.recon-btn-retransmit:hover:not(:disabled) {
+  background: rgba(251, 191, 36, 0.22);
+}
+
+/* Cancel — red */
+.recon-btn-cancel-action {
+  background: rgba(255, 100, 100, 0.12);
+  color: #ff6464;
+  border-color: rgba(255, 100, 100, 0.25);
+}
+
+.recon-btn-cancel-action:hover:not(:disabled) {
+  background: rgba(255, 100, 100, 0.22);
+}
+
+/* Dismiss / Go Back */
+.recon-btn-dismiss {
+  background: var(--card-bg, #1a1a2e);
+  color: var(--text-secondary, #888);
+  border-color: var(--border, #333);
+}
+
+.recon-btn-dismiss:hover {
+  background: var(--hover-bg, #252540);
+}
+
+.recon-resolved-label {
+  color: var(--text-secondary, #555);
+  font-size: 0.8rem;
+}
+
+/* Modal overlay */
+.recon-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.recon-modal {
+  background: var(--card-bg, #1a1a2e);
+  border: 1px solid var(--border, #333);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 500px;
+  width: 92%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.recon-modal-title {
+  margin: 0 0 16px 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.recon-modal-body {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #aaa);
+  line-height: 1.6;
+}
+
+.recon-modal-body p {
+  margin: 0 0 10px 0;
+}
+
+.recon-modal-body strong {
+  color: var(--text-primary, #e0e0e0);
+}
+
+.recon-modal-detail {
+  padding: 10px 14px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border, #333);
+  margin: 10px 0;
+  font-size: 0.82rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.recon-modal-warn {
+  color: #fbbf24 !important;
+  font-size: 0.8rem;
+}
+
+.recon-modal-info {
+  color: #60a5fa !important;
+  font-size: 0.8rem;
+}
+
+.recon-modal-danger {
+  color: #ff6464 !important;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.recon-modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.recon-modal-actions .recon-btn {
+  padding: 7px 18px;
+  font-size: 0.82rem;
+}

@@ -21,8 +21,10 @@ class OrderSchedulerTest {
     @Test
     void shouldPollOnlyUnprocessedOrdersAndProcessThem() {
         StubOrderRepository repository = new StubOrderRepository();
-        repository.save(new Order("ORD001", "FND001", BigDecimal.ONE, BigDecimal.TEN, "ACCT00001", OrderSide.BUY, OrderStatus.PLANNED, false));
-        repository.save(new Order("ORD002", "FND002", BigDecimal.ONE, BigDecimal.TEN, "ACCT00002", OrderSide.SELL, OrderStatus.PLANNED, true));
+        repository.save(new Order("ORD001", "FND001", BigDecimal.ONE, BigDecimal.TEN, "ACCT00001", OrderSide.BUY,
+                OrderStatus.PLANNED, false));
+        repository.save(new Order("ORD002", "FND002", BigDecimal.ONE, BigDecimal.TEN, "ACCT00002", OrderSide.SELL,
+                OrderStatus.PLANNED, true));
 
         TrackingOrderStateMachine stateMachine = new TrackingOrderStateMachine();
         OrderScheduler scheduler = new OrderScheduler(repository, stateMachine);
@@ -45,7 +47,7 @@ class OrderSchedulerTest {
         private final List<String> processedOrderIds = new ArrayList<>();
 
         private TrackingOrderStateMachine() {
-            super(new OrderManager(new MockAccountRepository(true), new MockFundRepository(true)));
+            super(new OrderManager(new MockAccountRepository(true), new MockFundRepository(true), null));
         }
 
         @Override
@@ -59,63 +61,65 @@ class OrderSchedulerTest {
             return processedOrderIds;
         }
     }
-    
+
     private static class MockAccountRepository implements AccountRepository {
         private final boolean exists;
-        
+
         public MockAccountRepository(boolean exists) {
             this.exists = exists;
         }
-        
+
         @Override
         public boolean existsByAccountId(String accountID) {
             return exists;
         }
-        
+
         @Override
         public List<com.iiit.oms.model.Account> findAll() {
             return java.util.Collections.emptyList();
         }
-        
+
         @Override
         public com.iiit.oms.model.Account save(com.iiit.oms.model.Account account) {
             return account;
         }
-        
+
         @Override
         public Optional<com.iiit.oms.model.Account> findByAccountId(String accountID) {
             return Optional.empty();
         }
-        
+
         @Override
         public void deleteByAccountId(String accountID) {
         }
     }
-    
+
     private static class MockFundRepository implements FundRepository {
         private final boolean exists;
-        
+
         public MockFundRepository(boolean exists) {
             this.exists = exists;
         }
-        
+
         @Override
         public boolean existsByFundId(String fundID) {
             return exists;
         }
-        
+
         @Override
         public List<com.iiit.oms.model.Fund> findAll() {
             return java.util.Collections.emptyList();
         }
+
         @Override
         public void deleteByFundId(String fundID) {
         }
+
         @Override
         public com.iiit.oms.model.Fund save(com.iiit.oms.model.Fund fund) {
-                return fund;
-            }
-        
+            return fund;
+        }
+
         @Override
         public Optional<com.iiit.oms.model.Fund> findByFundId(String fundID) {
             return Optional.empty();

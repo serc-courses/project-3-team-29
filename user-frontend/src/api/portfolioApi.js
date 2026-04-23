@@ -25,3 +25,8 @@ export function getAccounts() {
 export function getDashboard() {
   return api.get('/view/dashboard')
 }
+
+export function getPortfolio(accountID) {
+  const qs = accountID ? `?accountID=${encodeURIComponent(accountID)}` : ''
+  return api.get(`/view/portfolio${qs}`)
+}
