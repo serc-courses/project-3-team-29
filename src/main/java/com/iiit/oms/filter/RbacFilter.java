@@ -7,6 +7,8 @@ import com.sun.net.httpserver.Filter;
 import com.sun.net.httpserver.HttpExchange;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Set;
@@ -90,12 +92,12 @@ public class RbacFilter extends Filter {
         if (required == null) return true; // open endpoint
 
         // Authenticate
-        String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        String token = extractToken(exchange);
+        if (token == null || token.isBlank()) {
             reject(exchange, 401, "Authentication required");
             return false;
         }
-        UserSession session = jwtService.validateAndExtract(authHeader.substring(7).trim());
+        UserSession session = jwtService.validateAndExtract(token);
         if (session == null) {
             reject(exchange, 401, "Invalid or expired token");
             return false;
@@ -120,6 +122,24 @@ public class RbacFilter extends Filter {
         }
 
         return true;
+    }
+
+    private String extractToken(HttpExchange exchange) {
+        String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7).trim();
+        }
+
+        String query = exchange.getRequestURI().getQuery();
+        if (query == null || query.isBlank()) return null;
+
+        for (String part : query.split("&")) {
+            String[] kv = part.split("=", 2);
+            if (kv.length == 2 && "access_token".equals(kv[0])) {
+                return URLDecoder.decode(kv[1], StandardCharsets.UTF_8);
+            }
+        }
+        return null;
     }
 
     private Set<Role> resolveRequired(String method, String path) {

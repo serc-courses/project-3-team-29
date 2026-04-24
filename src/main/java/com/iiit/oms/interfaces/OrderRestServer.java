@@ -51,6 +51,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.security.KeyStore;
 import java.nio.charset.StandardCharsets;
 import java.math.BigDecimal;
@@ -852,10 +853,15 @@ public class OrderRestServer implements SseBroadcaster {
                         }
 
                         Order order = maybeOrder.get();
+                        OrderStatus prevStatus = order.getOrderStatus();
                         order.setQuantity(calculateQuantity(order.getAmount(), nav));
 
                         Order advancedOrder = orderStateMachine.processBooking(order);
                         orderRepository.save(advancedOrder);
+
+                        if (kafkaPublisher != null && kafkaPublisher.isEnabled()) {
+                            kafkaPublisher.publishOrderStateChanged(advancedOrder, prevStatus.name());
+                        }
 
                         if (projectionListener != null) {
                             projectionListener.onOrderStatusChanged(advancedOrder, bulkOrder, maybeFund.get());
@@ -988,10 +994,14 @@ public class OrderRestServer implements SseBroadcaster {
             List<OrderView> orders = projectionStore.findAllOrderViews();
             List<BulkOrderView> bulkOrders = projectionStore.findAllBulkOrderViews();
 
-            Map<String, Long> ordersByStatus = orders.stream()
-                    .collect(Collectors.groupingBy(OrderView::getOrderStatus, Collectors.counting()));
-            Map<String, Long> bulkOrdersByStatus = bulkOrders.stream()
-                    .collect(Collectors.groupingBy(BulkOrderView::getBulkOrderStatus, Collectors.counting()));
+                Map<String, Long> ordersByStatus = orders.stream()
+                    .collect(Collectors.groupingBy(
+                        o -> o.getOrderStatus() != null ? o.getOrderStatus() : "UNKNOWN",
+                        Collectors.counting()));
+                Map<String, Long> bulkOrdersByStatus = bulkOrders.stream()
+                    .collect(Collectors.groupingBy(
+                        b -> b.getBulkOrderStatus() != null ? b.getBulkOrderStatus() : "UNKNOWN",
+                        Collectors.counting()));
 
             Map<String, Object> dashboard = new HashMap<>();
             dashboard.put("totalOrders", orders.size());
@@ -1023,8 +1033,8 @@ public class OrderRestServer implements SseBroadcaster {
             }
 
             List<OrderView> orders = projectionStore.findAllOrderViews();
-            Map<String, List<OrderView>> grouped = orders.stream()
-                    .collect(Collectors.groupingBy(OrderView::getAccountID));
+                Map<String, List<OrderView>> grouped = orders.stream()
+                    .collect(Collectors.groupingBy(o -> o.getAccountID() != null ? o.getAccountID() : "UNKNOWN_ACCOUNT"));
 
             List<Map<String, Object>> response = grouped.entrySet().stream()
                     .map(entry -> {
@@ -1041,7 +1051,9 @@ public class OrderRestServer implements SseBroadcaster {
                                 .filter(Objects::nonNull)
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
                         Map<String, Long> statusCounts = accountOrders.stream()
-                                .collect(Collectors.groupingBy(OrderView::getOrderStatus, Collectors.counting()));
+                            .collect(Collectors.groupingBy(
+                                o -> o.getOrderStatus() != null ? o.getOrderStatus() : "UNKNOWN",
+                                Collectors.counting()));
 
                         Map<String, Object> row = new HashMap<>();
                         row.put("accountID", accountID);
@@ -1071,8 +1083,8 @@ public class OrderRestServer implements SseBroadcaster {
             }
 
             List<OrderView> orders = projectionStore.findAllOrderViews();
-            Map<String, List<OrderView>> grouped = orders.stream()
-                    .collect(Collectors.groupingBy(OrderView::getFundID));
+                Map<String, List<OrderView>> grouped = orders.stream()
+                    .collect(Collectors.groupingBy(o -> o.getFundID() != null ? o.getFundID() : "UNKNOWN_FUND"));
 
             List<Map<String, Object>> response = grouped.entrySet().stream()
                     .map(entry -> {
@@ -1089,7 +1101,9 @@ public class OrderRestServer implements SseBroadcaster {
                                 .filter(Objects::nonNull)
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
                         Map<String, Long> sideCounts = fundOrders.stream()
-                                .collect(Collectors.groupingBy(OrderView::getOrderSide, Collectors.counting()));
+                            .collect(Collectors.groupingBy(
+                                o -> o.getOrderSide() != null ? o.getOrderSide() : "UNKNOWN",
+                                Collectors.counting()));
                         String fundName = fundOrders.stream().map(OrderView::getFundName).filter(Objects::nonNull)
                                 .findFirst().orElse("");
                         BigDecimal nav = fundOrders.stream().map(OrderView::getNav).filter(Objects::nonNull).findFirst()
@@ -1261,10 +1275,8 @@ public class OrderRestServer implements SseBroadcaster {
     }
 
     private UserSession resolveAuthenticatedUser(HttpExchange exchange) {
-        String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
-        if (authHeader == null || !authHeader.startsWith("Bearer "))
-            return null;
-        String token = authHeader.substring(7).trim();
+        String token = extractAccessToken(exchange);
+        if (token == null || token.isBlank()) return null;
         if (jwtService != null) {
             return jwtService.validateAndExtract(token);
         }
@@ -1277,6 +1289,24 @@ public class OrderRestServer implements SseBroadcaster {
             return null;
         }
         return session;
+    }
+
+    private String extractAccessToken(HttpExchange exchange) {
+        String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7).trim();
+        }
+
+        String query = exchange.getRequestURI().getQuery();
+        if (query == null || query.isBlank()) return null;
+
+        for (String part : query.split("&")) {
+            String[] kv = part.split("=", 2);
+            if (kv.length == 2 && "access_token".equals(kv[0])) {
+                return URLDecoder.decode(kv[1], StandardCharsets.UTF_8);
+            }
+        }
+        return null;
     }
 
     private String resolveAdvisorId(HttpExchange exchange) {
@@ -1616,7 +1646,16 @@ public class OrderRestServer implements SseBroadcaster {
                 sendJsonResponse(exchange, 401, Map.of("message", "Not authenticated"));
                 return;
             }
-            sendJsonResponse(exchange, 200, userToResponse(session.getUser()));
+            // JWT only encodes userID/role/username; reload the full user from the DB
+            // so that displayName, accountID, and advisorID are always present.
+            User user = session.getUser();
+            if (userRepository != null) {
+                Optional<User> fullUser = userRepository.findByUserID(user.getUserID());
+                if (fullUser.isPresent()) {
+                    user = fullUser.get();
+                }
+            }
+            sendJsonResponse(exchange, 200, userToResponse(user));
         }
     }
 
@@ -1963,6 +2002,7 @@ public class OrderRestServer implements SseBroadcaster {
                     if (maybeOrder.isEmpty())
                         continue;
                     Order order = maybeOrder.get();
+                    OrderStatus statusBeforeContracted = order.getOrderStatus();
 
                     // Proportional share allocation: clientShares = (clientAmount / bulkAmount) *
                     // totalShares
@@ -1977,13 +2017,20 @@ public class OrderRestServer implements SseBroadcaster {
                     // CONTRACTED
                     orderStateMachine.advanceToContracted(order, contractRef, nav, allocatedShares);
                     orderRepository.save(order);
+                    if (kafkaPublisher != null && kafkaPublisher.isEnabled()) {
+                        kafkaPublisher.publishOrderStateChanged(order, statusBeforeContracted.name());
+                    }
                     contracted++;
 
                     // Only advance to BOOKED if there is NO reconciliation break.
                     // When a break is detected, orders freeze at CONTRACTED pending ops review.
                     if (!hasBreak) {
+                        OrderStatus statusBeforeBooked = order.getOrderStatus();
                         orderStateMachine.advanceToBooked(order);
                         orderRepository.save(order);
+                        if (kafkaPublisher != null && kafkaPublisher.isEnabled()) {
+                            kafkaPublisher.publishOrderStateChanged(order, statusBeforeBooked.name());
+                        }
 
                         // CASH MANAGEMENT: Debit or Credit upon finalized booking
                         // For BUY: deduct the original order amount (what the user paid), not
@@ -2110,6 +2157,7 @@ public class OrderRestServer implements SseBroadcaster {
                         if (maybeOrder.isEmpty())
                             continue;
                         Order order = maybeOrder.get();
+                        OrderStatus statusBeforeContracted = order.getOrderStatus();
 
                         BigDecimal allocatedShares = BigDecimal.ZERO;
                         if (order.getAmount() != null) {
@@ -2121,11 +2169,18 @@ public class OrderRestServer implements SseBroadcaster {
 
                         orderStateMachine.advanceToContracted(order, contractRef, nav, allocatedShares);
                         orderRepository.save(order);
+                        if (kafkaPublisher != null && kafkaPublisher.isEnabled()) {
+                            kafkaPublisher.publishOrderStateChanged(order, statusBeforeContracted.name());
+                        }
                         contracted++;
 
                         if (!hasBreak) {
+                            OrderStatus statusBeforeBooked = order.getOrderStatus();
                             orderStateMachine.advanceToBooked(order);
                             orderRepository.save(order);
+                            if (kafkaPublisher != null && kafkaPublisher.isEnabled()) {
+                                kafkaPublisher.publishOrderStateChanged(order, statusBeforeBooked.name());
+                            }
 
                             if (accountRepository != null && order.getAllocatedShares() != null && nav != null) {
                                 Optional<com.iiit.oms.model.Account> accOpt = accountRepository

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { CONFIG } from '../constants/config'
 
-export function useSse() {
+export function useSse(token) {
   const [connected, setConnected] = useState(false)
   const [eventCount, setEventCount] = useState(0)
   const [alerts, setAlerts] = useState([])
@@ -18,9 +18,13 @@ export function useSse() {
 
   const connect = useCallback(() => {
     if (eventSourceRef.current) eventSourceRef.current.close()
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current)
+
+    if (!token) return
 
     const baseUrl = import.meta.env.VITE_API_BASE_URL || ''
-    const es = new EventSource(`${baseUrl}${CONFIG.SSE_ENDPOINT}`)
+    const sseUrl = `${baseUrl}${CONFIG.SSE_ENDPOINT}?access_token=${encodeURIComponent(token)}`
+    const es = new EventSource(sseUrl)
     eventSourceRef.current = es
 
     es.onopen = () => {
@@ -54,7 +58,7 @@ export function useSse() {
         connect()
       }, delay)
     }
-  }, [pushAlert])
+  }, [pushAlert, token])
 
   useEffect(() => {
     connect()

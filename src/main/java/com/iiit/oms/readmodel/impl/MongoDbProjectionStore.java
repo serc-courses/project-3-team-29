@@ -246,6 +246,7 @@ public class MongoDbProjectionStore implements ProjectionStore {
                 .append("fundID", view.getFundID())
                 .append("fundName", view.getFundName())
                 .append("orderSide", view.getOrderSide())
+                .append("orderStatus", view.getOrderStatus())
                 .append("amount", view.getAmount())
                 .append("quantity", view.getQuantity())
                 .append("nav", view.getNav())

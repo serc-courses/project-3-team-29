@@ -45,6 +45,17 @@ services:
     networks:
       - oms_net
 
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ ping: 1 }).ok"]
+      interval: 10s
+      retries: 5
+    networks:
+      - oms_net
+
   app_1: &app
     build: .
     environment:
@@ -54,6 +65,9 @@ services:
       OMS_REDIS_HOST: redis
       OMS_REDIS_PORT: "6379"
       OMS_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      OMS_CQRS_USE_MONGO: "true"
+      OMS_MONGO_URI: mongodb://mongo:27017
+      OMS_MONGO_DB: oms
       OMS_KEYSTORE_PATH: /app/keystore.jks
       OMS_KEYSTORE_PASS: changeit
       OMS_ARCHIVE_DIR: /app/audit-archives
@@ -61,6 +75,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      mongo:
         condition: service_healthy
     volumes:
       - audit_archives:/app/audit-archives

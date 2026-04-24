@@ -26,9 +26,11 @@ import AdvisorActivity from './pages/AdvisorActivity/AdvisorActivity'
 import './App.css'
 
 function AppContent() {
-  const { connected, eventCount } = useSse()
   const { isAdvisor, user } = useAuth()
   const advisorId = user?.advisorID
+  // Pass the stored token so useSse reconnects automatically after login
+  const token = user ? localStorage.getItem('oms_token') : null
+  const { connected, eventCount } = useSse(token)
 
   return (
     <div className={`app-shell${isAdvisor ? ' app-shell--advisor' : ''}`}>

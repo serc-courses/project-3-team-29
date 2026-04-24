@@ -6,8 +6,8 @@ import FilterBar from '../components/FilterBar/FilterBar'
 import StatusBadge from '../components/StatusBadge/StatusBadge'
 import { formatCurrency, formatQuantity } from '../utils/formatters'
 import { BULK_ORDER_STATUS, ORDER_SIDE } from '../constants/orderStatus'
-import { CONFIG } from '../constants/config'
 import { exportToCsv } from '../utils/exportCsv'
+import { api } from '../api/client'
 
 const STATUS_OPTIONS = Object.values(BULK_ORDER_STATUS).map((s) => ({ value: s, label: s }))
 const SIDE_OPTIONS = Object.values(ORDER_SIDE).map((s) => ({ value: s, label: s }))
@@ -27,18 +27,12 @@ function ContractModal({ bulkOrder, onClose, onSuccess }) {
     setSubmitting(true)
     setError(null)
     try {
-      const res = await fetch(`${CONFIG.API_BASE_URL}/transfer-agent/contract`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          bulkOrderId: bulkOrder.bulkOrderID,
-          nav: parseFloat(nav),
-          totalShares: parseFloat(totalShares),
-          contractRef,
-        }),
+      const data = await api.post('/transfer-agent/contract', {
+        bulkOrderId: bulkOrder.bulkOrderID,
+        nav: parseFloat(nav),
+        totalShares: parseFloat(totalShares),
+        contractRef,
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message || 'Contract submission failed')
       onSuccess(data)
     } catch (err) {
       setError(err.message)
@@ -117,11 +111,7 @@ export default function BulkOrders({ sseEventCount = 0 }) {
     setEodProcessing(true);
     setError(null);
     try {
-      const res = await fetch(`${CONFIG.API_BASE_URL}/transfer-agent/eod`, {
-        method: 'POST',
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'EOD processing failed');
+      const data = await api.post('/transfer-agent/eod', {});
       setContractSuccess(`EOD processed! ${data.processedBulks} bulks, ${data.bookedOrders} orders booked.`);
       getBulkOrderViews().then(setBulkOrders).catch(() => { });
     } catch (err) {

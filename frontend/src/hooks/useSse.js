@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { CONFIG } from '../constants/config'
 
-export function useSse(handlers) {
+export function useSse(handlers, token) {
   const [connected, setConnected] = useState(false)
   const esRef = useRef(null)
   const retryDelay = useRef(1000)
+  const retryTimeoutRef = useRef(null)
   const handlersRef = useRef(handlers)
   handlersRef.current = handlers
 
@@ -12,8 +13,12 @@ export function useSse(handlers) {
     if (esRef.current) {
       esRef.current.close()
     }
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current)
 
-    const es = new EventSource(CONFIG.SSE_ENDPOINT)
+    if (!token) return
+
+    const sseUrl = `${CONFIG.SSE_ENDPOINT}?access_token=${encodeURIComponent(token)}`
+    const es = new EventSource(sseUrl)
     esRef.current = es
 
     es.onopen = () => {
@@ -27,7 +32,7 @@ export function useSse(handlers) {
       esRef.current = null
       const delay = Math.min(retryDelay.current, 30000)
       retryDelay.current = Math.min(delay * 2, 30000)
-      setTimeout(connect, delay)
+      retryTimeoutRef.current = setTimeout(connect, delay)
     }
 
     Object.keys(handlersRef.current).forEach((eventType) => {
@@ -40,13 +45,14 @@ export function useSse(handlers) {
         }
       })
     })
-  }, [])
+  }, [token])
 
   useEffect(() => {
     connect()
     return () => {
       esRef.current?.close()
       esRef.current = null
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current)
     }
   }, [connect])
 

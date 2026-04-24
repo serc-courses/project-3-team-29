@@ -28,7 +28,7 @@ echo "[run] Current container status:"
 docker compose ps
 
 missing=""
-for svc in app_1 app_2 nginx postgres redis kafka; do
+for svc in app_1 app_2 nginx postgres redis kafka mongo; do
     if ! docker compose ps --services --filter status=running | grep -qx "$svc"; then
         missing="$missing $svc"
     fi

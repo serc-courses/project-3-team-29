@@ -139,6 +139,7 @@ export default function OrderDetail({ sseEventCount = 0 }) {
   const { data, loading } = useFetch(() => getOrders({ orderID: orderId }), [orderId, sseEventCount])
 
   const order = data?.[0]
+  const showExecutionFields = order?.orderStatus === 'BOOKED'
   const sideColors = SIDE_COLORS[order?.orderSide] || { text: '#64748B', bg: '#F1F5F9' }
 
   if (loading) {
@@ -192,7 +193,7 @@ export default function OrderDetail({ sseEventCount = 0 }) {
           <div className="order-detail-amount">
             <AmountDisplay amount={order.amount} size="lg" />
           </div>
-          {order.quantity && order.nav && (
+          {showExecutionFields && order.quantity && order.nav && (
             <p className="order-detail-nav-line text-muted">
               {formatQuantity(order.quantity)} units @ {formatCurrency(order.nav)}
             </p>
@@ -235,8 +236,8 @@ export default function OrderDetail({ sseEventCount = 0 }) {
             <DetailRow label="Amount" value={formatCurrency(order.amount)} mono />
             <DetailRow label="Trade Date" value={order.tradeDate || '—'} mono />
             <DetailRow label="Settlement Date" value={order.settlementDate || '—'} mono />
-            <DetailRow label="NAV" value={order.nav ? formatCurrency(order.nav) : '—'} mono />
-            <DetailRow label="Units Allocated" value={order.allocatedShares ? formatQuantity(order.allocatedShares) : '—'} mono />
+            <DetailRow label="NAV" value={showExecutionFields && order.nav ? formatCurrency(order.nav) : '—'} mono />
+            <DetailRow label="Units Allocated" value={showExecutionFields && order.allocatedShares ? formatQuantity(order.allocatedShares) : '—'} mono />
             <DetailRow label="Contract Reference" value={order.contractRef || '—'} mono />
             <DetailRow label="Status" value={<StatusPill status={order.orderStatus} />} />
           </div>

@@ -21,7 +21,11 @@ import java.util.logging.Logger;
  */
 public class KafkaNotificationConsumer implements Runnable {
     private static final Logger LOGGER = Logger.getLogger(KafkaNotificationConsumer.class.getName());
-    private static final String GROUP_ID = "oms-notification-consumer";
+    // Each JVM instance needs a UNIQUE consumer group so that both replicas receive
+    // every Kafka message and can forward it to their locally-connected SSE clients.
+    // A shared group would deliver each message to only one of the two replicas,
+    // causing the SSE client on the other replica to miss the event.
+    private static final String GROUP_ID = "oms-sse-" + java.util.UUID.randomUUID().toString().substring(0, 8);
 
     private final SseBroadcaster sseBroadcaster;
     private final String bootstrapServers;
