@@ -1,3 +1,27 @@
+# Linux Quick Start (Copy-Paste)
+
+Run these from the project root on Linux:
+
+```bash
+cd /home/shreyasmehta/Desktop/6thsem/se/project-3/project-3-team-29
+docker compose down
+docker compose up -d --build
+docker compose ps
+```
+
+If you also want both frontends + backend logs in one go after Docker is up:
+
+```bash
+make run
+```
+
+Open:
+- Admin: http://localhost:5173
+- User/Advisor: http://localhost:5174
+- API via Nginx: http://localhost
+
+---
+
 # NFR1 to NFR5 in Simple Words
 
 This document explains each NFR in plain language:

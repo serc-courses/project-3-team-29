@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-API_BASE_URL="${OMS_API_BASE_URL:-http://localhost:8080}"
+API_BASE_URL="${OMS_API_BASE_URL:-http://localhost}"
 
 if ! command -v curl &> /dev/null; then
   echo "Error: curl not found in PATH."
