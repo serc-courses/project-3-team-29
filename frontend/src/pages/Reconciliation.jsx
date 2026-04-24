@@ -152,21 +152,12 @@ export default function Reconciliation() {
                 </div>
             </div>
 
-            <div className="recon-info-banner">
-                <strong>Post-trade reconciliation engine.</strong> When a TA contract callback
-                has a mismatch (&gt;0.01%), orders are <strong>frozen at CONTRACTED</strong>.
-                An operations analyst must review and choose:
-                <strong> Accept</strong> (book with TA's values),
-                <strong> Retransmit</strong> (roll back for a corrected contract), or
-                <strong> Cancel</strong> (abandon orders).
-            </div>
-
             <div className="recon-count">
                 Showing {breaks.length} break{breaks.length !== 1 ? 's' : ''}
             </div>
 
             {breaks.length === 0 ? (
-                <div className="recon-empty">
+                <div className="recon-empty card">
                     <div className="recon-empty-icon">✓</div>
                     <div className="recon-empty-text">No reconciliation breaks found</div>
                     <div className="recon-empty-sub">All contract callbacks are within tolerance</div>

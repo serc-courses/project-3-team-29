@@ -48,21 +48,6 @@
   background: var(--hover-bg, #252540);
 }
 
-/* Info banner */
-.recon-info-banner {
-  padding: 12px 16px;
-  border-radius: 8px;
-  background: rgba(96, 165, 250, 0.08);
-  border: 1px solid rgba(96, 165, 250, 0.2);
-  color: var(--text-secondary, #aaa);
-  font-size: 0.82rem;
-  line-height: 1.5;
-}
-
-.recon-info-banner strong {
-  color: var(--text-primary, #e0e0e0);
-}
-
 .recon-count {
   font-size: 0.8rem;
   color: var(--text-secondary, #888);
@@ -85,10 +70,7 @@
 
 .recon-empty {
   text-align: center;
-  padding: 48px 16px;
-  border-radius: 12px;
-  background: var(--card-bg, #1a1a2e);
-  border: 1px solid var(--border, #333);
+  padding: 56px 16px;
 }
 
 .recon-empty-icon {
