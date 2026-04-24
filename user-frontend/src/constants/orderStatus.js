@@ -9,6 +9,7 @@ export const ORDER_STATUS = {
   CONTRACTED: 'CONTRACTED',
   BOOKED: 'BOOKED',
   ERRORED: 'ERRORED',
+  CANCELLED: 'CANCELLED',
 }
 
 export const ORDER_SIDE = {
@@ -20,7 +21,7 @@ export const STATUS_GROUP = {
   PROCESSING: ['PLANNED', 'VALIDATED', 'ENRICHED', 'PLACED'],
   PENDING: ['BULKED', 'TRANSMITTED', 'CONFIRMED', 'CONTRACTED'],
   COMPLETED: ['BOOKED'],
-  FAILED: ['ERRORED'],
+  FAILED: ['ERRORED', 'CANCELLED'],
 }
 
 export const STATUS_LABEL = {
@@ -34,5 +35,6 @@ export const STATUS_LABEL = {
   CONTRACTED: 'Contracted',
   BOOKED: 'Completed',
   ERRORED: 'Failed',
+  CANCELLED: 'Cancelled',
 }
 

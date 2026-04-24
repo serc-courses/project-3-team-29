@@ -52,9 +52,30 @@ function NotFoundIcon() {
 function ProgressTracker({ status }) {
   const currentIndex = ORDER_STEPS.indexOf(status)
   const isErrored = status === 'ERRORED'
+  const isCancelled = status === 'CANCELLED'
   const isTerminal = status === 'BOOKED'
 
   const steps = isErrored ? ORDER_STEPS : ORDER_STEPS
+
+  if (isCancelled) {
+    return (
+      <div className="progress-tracker">
+        <div className="progress-step">
+          <div className="progress-step-indicator">
+            <div className="progress-dot errored">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </div>
+          </div>
+          <div className="progress-step-content">
+            <span className="progress-step-label" style={{ color: '#64748B' }}>Order Cancelled</span>
+            <span className="progress-step-badge" style={{ background: '#F1F5F9', color: '#64748B' }}>Cancelled by user</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="progress-tracker">

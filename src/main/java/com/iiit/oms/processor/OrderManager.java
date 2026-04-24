@@ -81,14 +81,17 @@ public class OrderManager {
                 BigDecimal pendingSellAmount = BigDecimal.ZERO;
 
                 for (Order o : accountOrders) {
-                    if (o.getOrderStatus() == com.iiit.oms.model.OrderStatus.BOOKED && o.getAllocatedShares() != null) {
-                        if (o.getOrderSide() == null || o.getOrderSide() == OrderSide.BUY) {
-                            bookedShares = bookedShares.add(o.getAllocatedShares());
-                        } else if (o.getOrderSide() == OrderSide.SELL) {
-                            bookedShares = bookedShares.subtract(o.getAllocatedShares());
+                    if (o.getOrderStatus() == com.iiit.oms.model.OrderStatus.BOOKED) {
+                        BigDecimal shares = o.getAllocatedShares() != null ? o.getAllocatedShares() : o.getQuantity();
+                        if (shares != null) {
+                            if (o.getOrderSide() == null || o.getOrderSide() == OrderSide.BUY) {
+                                bookedShares = bookedShares.add(shares);
+                            } else if (o.getOrderSide() == OrderSide.SELL) {
+                                bookedShares = bookedShares.subtract(shares);
+                            }
                         }
                     } else if (o.getOrderStatus() != com.iiit.oms.model.OrderStatus.ERRORED && o.getOrderStatus() != com.iiit.oms.model.OrderStatus.BOOKED && o.getOrderStatus() != com.iiit.oms.model.OrderStatus.CANCELLED) {
-                        if (o.getOrderSide() == OrderSide.SELL && o.getAmount() != null) {
+                        if (o.getOrderSide() == OrderSide.SELL && o.getAmount() != null && !o.getOrderID().equals(order.getOrderID())) {
                             pendingSellAmount = pendingSellAmount.add(o.getAmount());
                         }
                     }

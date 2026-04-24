@@ -2055,7 +2055,7 @@ public class OrderRestServer implements SseBroadcaster {
                 BigDecimal pendingBuyCash = BigDecimal.ZERO;
 
                 for (Order o : allOrders) {
-                    if (o.getOrderStatus() != OrderStatus.BOOKED && o.getOrderStatus() != OrderStatus.ERRORED) {
+                    if (o.getOrderStatus() != OrderStatus.BOOKED && o.getOrderStatus() != OrderStatus.ERRORED && o.getOrderStatus() != OrderStatus.CANCELLED) {
                         if (o.getOrderSide() == OrderSide.SELL && o.getAmount() != null) {
                             String key = o.getAccountID() + ":" + o.getProductID();
                             pendingSellCash.put(key,
@@ -2303,6 +2303,22 @@ public class OrderRestServer implements SseBroadcaster {
                         orderStateMachine.advanceToBooked(order);
                         orderRepository.save(order);
                         affectedOrders++;
+
+                        // CASH MANAGEMENT: Debit or Credit upon ACCEPT-forced booking
+                        // (same logic as ContractCallbackHandler for normal booking)
+                        if (accountRepository != null && order.getAllocatedShares() != null && order.getNav() != null) {
+                            Optional<com.iiit.oms.model.Account> accOpt = accountRepository.findByAccountId(order.getAccountID());
+                            if (accOpt.isPresent()) {
+                                com.iiit.oms.model.Account acc = accOpt.get();
+                                BigDecimal executedAmount = order.getAllocatedShares().multiply(order.getNav()).setScale(4, java.math.RoundingMode.HALF_UP);
+                                if (order.getOrderSide() == null || order.getOrderSide() == com.iiit.oms.model.OrderSide.BUY) {
+                                    acc.setCashBalance(acc.getCashBalance().subtract(executedAmount));
+                                } else if (order.getOrderSide() == com.iiit.oms.model.OrderSide.SELL) {
+                                    acc.setCashBalance(acc.getCashBalance().add(executedAmount));
+                                }
+                                accountRepository.save(acc);
+                            }
+                        }
 
                         Optional<Fund> maybeFund = resolveFund(order.getProductID());
                         if (projectionListener != null && maybeFund.isPresent()) {

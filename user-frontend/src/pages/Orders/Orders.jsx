@@ -44,11 +44,15 @@ export default function Orders({ sseEventCount = 0 }) {
   const [activeFilter, setActiveFilter] = useState('all')
   const [search, setSearch] = useState('')
 
-  const { data, loading } = useFetch(
+  const { data, loading, refetch } = useFetch(
     () => getOrders(accountID ? { accountID } : {}),
     [sseEventCount, accountID]
   )
   const orders = data || []
+
+  const handleCancelSuccess = () => {
+    refetch()
+  }
 
   const counts = useMemo(() => {
     const result = { all: orders.length }
@@ -127,7 +131,7 @@ export default function Orders({ sseEventCount = 0 }) {
       ) : (
         <div className="orders-list">
           {filtered.map(order => (
-            <OrderCard key={order.orderID} order={order} />
+            <OrderCard key={order.orderID} order={order} onCancelSuccess={handleCancelSuccess} />
           ))}
         </div>
       )}

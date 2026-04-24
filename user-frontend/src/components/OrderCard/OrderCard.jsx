@@ -6,7 +6,7 @@ import { formatCurrency } from '../../utils/formatters'
 import { SIDE_COLORS } from '../../constants/statusColors'
 import './OrderCard.css'
 
-export default function OrderCard({ order, onClick }) {
+export default function OrderCard({ order, onClick, onCancelSuccess }) {
   const sideColors = SIDE_COLORS[order.orderSide] || { text: '#64748B', bg: '#F1F5F9' }
   const [cancelling, setCancelling] = useState(false)
   const canCancel = ['PLANNED', 'VALIDATED', 'ENRICHED', 'PLACED'].includes(order.orderStatus)
@@ -18,8 +18,11 @@ export default function OrderCard({ order, onClick }) {
     setCancelling(true);
     try {
         await cancelOrder(order.orderID);
+        if (onCancelSuccess) {
+          onCancelSuccess(order.orderID);
+        }
     } catch(err) {
-        alert("Failed to cancel order: " + (err.response?.data?.message || err.message));
+        alert("Failed to cancel order: " + (err.message || 'Unknown error'));
     } finally {
         setCancelling(false);
     }

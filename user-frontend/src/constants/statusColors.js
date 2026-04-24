@@ -12,6 +12,8 @@ export const STATUS_COLORS = {
   BOOKED: { bg: '#ECFDF5', text: '#059669', border: '#A7F3D0' },
 
   ERRORED: { bg: '#FEF2F2', text: '#DC2626', border: '#FECACA' },
+
+  CANCELLED: { bg: '#F8FAFC', text: '#64748B', border: '#CBD5E1' },
 }
 
 export const SIDE_COLORS = {
