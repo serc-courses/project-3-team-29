@@ -12,6 +12,9 @@ export async function getFunds(accountID) {
   }
   return funds.map(f => ({
     ...f,
+    fundID: f.fundID,
+    fundName: f.fundName,
+    nav: aggMap[f.fundID]?.nav ?? f.nav ?? f.NAV ?? 0,
     orderCount: aggMap[f.fundID]?.orderCount ?? 0,
     totalAmount: aggMap[f.fundID]?.totalAmount ?? 0,
     totalQuantity: aggMap[f.fundID]?.totalQuantity ?? 0,

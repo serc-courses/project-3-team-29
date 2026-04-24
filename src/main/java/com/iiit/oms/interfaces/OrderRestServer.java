@@ -1138,35 +1138,39 @@ public class OrderRestServer implements SseBroadcaster {
                     .map(entry -> {
                         String fundID = entry.getKey();
                         List<OrderView> fundOrders = entry.getValue();
+                    List<OrderView> activeOrders = fundOrders.stream()
+                        .filter(o -> !"ERRORED".equals(o.getOrderStatus())
+                            && !"FAILED".equals(o.getOrderStatus())
+                            && !"CANCELLED".equals(o.getOrderStatus()))
+                        .collect(Collectors.toList());
+
                         BigDecimal totalAmount = fundOrders.stream()
                                 .filter(o -> !"ERRORED".equals(o.getOrderStatus())
                                         && !"FAILED".equals(o.getOrderStatus()) && !"SELL".equals(o.getOrderSide()))
                                 .map(OrderView::getAmount)
                                 .filter(Objects::nonNull)
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-                        BigDecimal totalQuantity = fundOrders.stream()
-                            .filter(o -> !"ERRORED".equals(o.getOrderStatus())
-                                && !"FAILED".equals(o.getOrderStatus())
-                                && !"CANCELLED".equals(o.getOrderStatus()))
+                    BigDecimal totalQuantity = activeOrders.stream()
                                 .map(OrderView::getQuantity)
                                 .filter(Objects::nonNull)
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-                        Map<String, Long> sideCounts = fundOrders.stream()
-                            .filter(o -> !"ERRORED".equals(o.getOrderStatus())
-                                    && !"FAILED".equals(o.getOrderStatus())
-                                    && !"CANCELLED".equals(o.getOrderStatus()))
+                    Map<String, Long> sideCounts = activeOrders.stream()
                             .collect(Collectors.groupingBy(
                                 o -> o.getOrderSide() != null ? o.getOrderSide() : "UNKNOWN",
                                 Collectors.counting()));
-                        String fundName = fundOrders.stream().map(OrderView::getFundName).filter(Objects::nonNull)
-                                .findFirst().orElse("");
-                        BigDecimal nav = fundOrders.stream().map(OrderView::getNav).filter(Objects::nonNull).findFirst()
-                                .orElse(null);
+
+                    Optional<Fund> maybeFund = fundRepository.findByFundId(fundID);
+                    String fundName = maybeFund.map(Fund::getFundName)
+                        .orElseGet(() -> fundOrders.stream().map(OrderView::getFundName).filter(Objects::nonNull)
+                            .findFirst().orElse(""));
+                    BigDecimal nav = maybeFund.map(Fund::getNAV)
+                        .orElseGet(() -> fundOrders.stream().map(OrderView::getNav).filter(Objects::nonNull)
+                            .findFirst().orElse(null));
 
                         Map<String, Object> row = new HashMap<>();
                         row.put("fundID", fundID);
                         row.put("fundName", fundName);
-                        row.put("orderCount", fundOrders.size());
+                    row.put("orderCount", activeOrders.size());
                         row.put("totalAmount", totalAmount);
                         row.put("totalQuantity", totalQuantity);
                         row.put("orderSides", sideCounts);
@@ -2421,43 +2425,97 @@ public class OrderRestServer implements SseBroadcaster {
                     fundNames.put(f.getFundID(), f.getFundName());
                 }
 
-                // Aggregate P/L per holding using average cost basis
-                Map<String, Map<String, Object>> aggregated = new HashMap<>();
+                // Build lot-level holdings (each BUY order is its own lot), then apply SELLs FIFO.
+                Map<String, List<Map<String, Object>>> lotsByKey = new HashMap<>();
                 for (Order order : bookedOrders) {
                     String fundId = order.getProductID();
                     String accountId = order.getAccountID();
                     String key = accountId + ":" + fundId;
 
-                    Map<String, Object> h = aggregated.computeIfAbsent(key, k -> {
-                        Map<String, Object> map = new HashMap<>();
-                        map.put("accountID", accountId);
-                        map.put("fundID", fundId);
-                        map.put("fundName", fundNames.getOrDefault(fundId, fundId));
-                        map.put("shares", BigDecimal.ZERO);
-                        map.put("investedAmount", BigDecimal.ZERO);
-                        return map;
-                    });
-
-                    BigDecimal shares = order.getAllocatedShares();
-                    BigDecimal amount = order.getAmount();
-
-                    BigDecimal currShares = (BigDecimal) h.get("shares");
-                    BigDecimal currInvested = (BigDecimal) h.get("investedAmount");
+                    List<Map<String, Object>> lots = lotsByKey.computeIfAbsent(key, k -> new ArrayList<>());
+                    BigDecimal shares = order.getAllocatedShares() != null ? order.getAllocatedShares() : BigDecimal.ZERO;
+                    BigDecimal amount = order.getAmount() != null ? order.getAmount() : BigDecimal.ZERO;
 
                     if (order.getOrderSide() == null || order.getOrderSide() == com.iiit.oms.model.OrderSide.BUY) {
-                        h.put("shares", currShares.add(shares));
-                        h.put("investedAmount", currInvested.add(amount));
+                        Map<String, Object> lot = new HashMap<>();
+                        lot.put("orderID", order.getOrderID());
+                        lot.put("tradeDate", order.getTradeDate());
+                        lot.put("accountID", accountId);
+                        lot.put("fundID", fundId);
+                        lot.put("fundName", fundNames.getOrDefault(fundId, fundId));
+                        lot.put("shares", shares);
+                        lot.put("investedAmount", amount);
+                        lots.add(lot);
                     } else if (order.getOrderSide() == com.iiit.oms.model.OrderSide.SELL) {
-                        if (currShares.compareTo(BigDecimal.ZERO) > 0) {
-                            BigDecimal avgCost = currInvested.divide(currShares, 8, java.math.RoundingMode.HALF_UP);
-                            currShares = currShares.subtract(shares);
-                            if (currShares.compareTo(BigDecimal.ZERO) < 0) {
-                                currShares = BigDecimal.ZERO;
+                        BigDecimal remainingSellShares = shares;
+                        for (Map<String, Object> lot : lots) {
+                            if (remainingSellShares.compareTo(BigDecimal.ZERO) <= 0) {
+                                break;
                             }
-                            h.put("shares", currShares);
-                            h.put("investedAmount",
-                                    currShares.multiply(avgCost).setScale(2, java.math.RoundingMode.HALF_UP));
+                            BigDecimal lotShares = (BigDecimal) lot.get("shares");
+                            BigDecimal lotInvested = (BigDecimal) lot.get("investedAmount");
+                            if (lotShares == null || lotShares.compareTo(BigDecimal.ZERO) <= 0) {
+                                continue;
+                            }
+
+                            BigDecimal consumeShares = lotShares.min(remainingSellShares);
+                            BigDecimal avgCostPerShare = lotShares.compareTo(BigDecimal.ZERO) > 0
+                                    ? lotInvested.divide(lotShares, 8, java.math.RoundingMode.HALF_UP)
+                                    : BigDecimal.ZERO;
+                            BigDecimal consumeInvested = avgCostPerShare.multiply(consumeShares)
+                                    .setScale(2, java.math.RoundingMode.HALF_UP);
+
+                            BigDecimal newShares = lotShares.subtract(consumeShares);
+                            BigDecimal newInvested = lotInvested.subtract(consumeInvested);
+                            if (newShares.compareTo(BigDecimal.ZERO) < 0) newShares = BigDecimal.ZERO;
+                            if (newInvested.compareTo(BigDecimal.ZERO) < 0) newInvested = BigDecimal.ZERO;
+
+                            lot.put("shares", newShares);
+                            lot.put("investedAmount", newInvested);
+                            remainingSellShares = remainingSellShares.subtract(consumeShares);
                         }
+                    }
+                }
+
+                // Apply pending SELL reservations (not BOOKED yet) so available shares remain realistic.
+                for (Map.Entry<String, List<Map<String, Object>>> entry : lotsByKey.entrySet()) {
+                    String key = entry.getKey();
+                    List<Map<String, Object>> lots = entry.getValue();
+                    String[] parts = key.split(":", 2);
+                    String fundId = parts.length == 2 ? parts[1] : "";
+
+                    BigDecimal liveNav = currentNavs.getOrDefault(fundId, BigDecimal.ZERO);
+                    BigDecimal pendingCash = pendingSellCash.getOrDefault(key, BigDecimal.ZERO);
+                    if (pendingCash.compareTo(BigDecimal.ZERO) <= 0 || liveNav.compareTo(BigDecimal.ZERO) <= 0) {
+                        continue;
+                    }
+
+                    BigDecimal pendingShares = pendingCash.divide(liveNav, 6, java.math.RoundingMode.HALF_UP);
+                    for (Map<String, Object> lot : lots) {
+                        if (pendingShares.compareTo(BigDecimal.ZERO) <= 0) {
+                            break;
+                        }
+                        BigDecimal lotShares = (BigDecimal) lot.get("shares");
+                        BigDecimal lotInvested = (BigDecimal) lot.get("investedAmount");
+                        if (lotShares == null || lotShares.compareTo(BigDecimal.ZERO) <= 0) {
+                            continue;
+                        }
+
+                        BigDecimal consumeShares = lotShares.min(pendingShares);
+                        BigDecimal avgCostPerShare = lotShares.compareTo(BigDecimal.ZERO) > 0
+                                ? lotInvested.divide(lotShares, 8, java.math.RoundingMode.HALF_UP)
+                                : BigDecimal.ZERO;
+                        BigDecimal consumeInvested = avgCostPerShare.multiply(consumeShares)
+                                .setScale(2, java.math.RoundingMode.HALF_UP);
+
+                        BigDecimal newShares = lotShares.subtract(consumeShares);
+                        BigDecimal newInvested = lotInvested.subtract(consumeInvested);
+                        if (newShares.compareTo(BigDecimal.ZERO) < 0) newShares = BigDecimal.ZERO;
+                        if (newInvested.compareTo(BigDecimal.ZERO) < 0) newInvested = BigDecimal.ZERO;
+
+                        lot.put("shares", newShares);
+                        lot.put("investedAmount", newInvested);
+                        pendingShares = pendingShares.subtract(consumeShares);
                     }
                 }
 
@@ -2465,54 +2523,51 @@ public class OrderRestServer implements SseBroadcaster {
                 BigDecimal totalInvested = BigDecimal.ZERO;
                 BigDecimal totalCurrentValue = BigDecimal.ZERO;
 
-                for (Map<String, Object> h : aggregated.values()) {
-                    BigDecimal shares = (BigDecimal) h.get("shares");
-                    if (shares.compareTo(BigDecimal.ZERO) <= 0)
-                        continue; // Skip emptied positions
+                for (List<Map<String, Object>> lots : lotsByKey.values()) {
+                    for (Map<String, Object> lot : lots) {
+                    BigDecimal shares = (BigDecimal) lot.get("shares");
+                    if (shares == null || shares.compareTo(BigDecimal.ZERO) <= 0) {
+                        continue;
+                    }
 
-                    BigDecimal invested = (BigDecimal) h.get("investedAmount");
-                    String fundId = (String) h.get("fundID");
+                    BigDecimal invested = (BigDecimal) lot.get("investedAmount");
+                    String fundId = (String) lot.get("fundID");
                     BigDecimal liveNav = currentNavs.getOrDefault(fundId, BigDecimal.ZERO);
-
-                    // Average buy nav for display
-                    BigDecimal avgBuyNav = invested.divide(shares, 4, java.math.RoundingMode.HALF_UP);
+                    BigDecimal buyNav = invested.compareTo(BigDecimal.ZERO) > 0 && shares.compareTo(BigDecimal.ZERO) > 0
+                        ? invested.divide(shares, 4, java.math.RoundingMode.HALF_UP)
+                        : BigDecimal.ZERO;
 
                     BigDecimal currentValue = liveNav.multiply(shares).setScale(2, java.math.RoundingMode.HALF_UP);
                     BigDecimal pnl = currentValue.subtract(invested);
                     BigDecimal pnlPct = invested.compareTo(BigDecimal.ZERO) > 0
-                            ? pnl.divide(invested, 6, java.math.RoundingMode.HALF_UP)
-                                    .multiply(new BigDecimal("100")).setScale(2, java.math.RoundingMode.HALF_UP)
-                            : BigDecimal.ZERO;
-
-                    // Calculate pending shares equivalent
-                    BigDecimal currentPendingCash = pendingSellCash.getOrDefault(h.get("accountID") + ":" + fundId,
-                            BigDecimal.ZERO);
-                    BigDecimal pendingShares = liveNav.compareTo(BigDecimal.ZERO) > 0
-                            ? currentPendingCash.divide(liveNav, 6, java.math.RoundingMode.HALF_UP)
-                            : BigDecimal.ZERO;
-
-                    BigDecimal availableShares = shares.subtract(pendingShares);
-                    if (availableShares.compareTo(BigDecimal.ZERO) < 0) {
-                        availableShares = BigDecimal.ZERO;
-                    }
+                        ? pnl.divide(invested, 6, java.math.RoundingMode.HALF_UP)
+                            .multiply(new BigDecimal("100")).setScale(2, java.math.RoundingMode.HALF_UP)
+                        : BigDecimal.ZERO;
 
                     totalInvested = totalInvested.add(invested);
                     totalCurrentValue = totalCurrentValue.add(currentValue);
 
                     Map<String, Object> out = new HashMap<>();
-                    out.put("orderID", fundId + "-agg"); // Unique enough for React keys when aggregated
-                    out.put("accountID", h.get("accountID"));
+                    out.put("orderID", lot.get("orderID"));
+                    out.put("tradeDate", lot.get("tradeDate"));
+                    out.put("accountID", lot.get("accountID"));
                     out.put("fundID", fundId);
-                    out.put("fundName", h.get("fundName"));
+                    out.put("fundName", lot.get("fundName"));
                     out.put("investedAmount", invested);
-                    out.put("buyNav", avgBuyNav);
-                    out.put("allocatedShares", availableShares);
+                    out.put("buyNav", buyNav);
+                    out.put("allocatedShares", shares);
                     out.put("currentNav", liveNav);
                     out.put("currentValue", currentValue);
                     out.put("pnl", pnl);
                     out.put("pnlPercent", pnlPct);
                     holdings.add(out);
+                    }
                 }
+
+                holdings = holdings.stream()
+                    .sorted(Comparator.comparing((Map<String, Object> h) -> (String) h.getOrDefault("tradeDate", ""))
+                        .reversed())
+                    .collect(Collectors.toList());
 
                 BigDecimal totalPnl = totalCurrentValue.subtract(totalInvested);
                 BigDecimal totalPnlPct = totalInvested.compareTo(BigDecimal.ZERO) > 0

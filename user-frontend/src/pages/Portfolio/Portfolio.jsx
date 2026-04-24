@@ -97,6 +97,8 @@ export default function Portfolio({ sseEventCount }) {
                                         <div>
                                             <div className="pf-holding-fund">{h.fundName}</div>
                                             <div className="pf-holding-id">{h.fundID}</div>
+                                            <div className="pf-holding-id">Order: {h.orderID}</div>
+                                            {h.tradeDate && <div className="pf-holding-id">Trade Date: {h.tradeDate}</div>}
                                         </div>
                                         <div className={`pf-holding-pnl ${hPos ? 'text-green' : 'text-red'}`}>
                                             {hPos ? '+' : ''}₹{fmt(hPnl)}
