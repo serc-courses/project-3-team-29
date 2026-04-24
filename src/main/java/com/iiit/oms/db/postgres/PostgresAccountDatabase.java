@@ -2,6 +2,7 @@ package com.iiit.oms.db.postgres;
 
 import com.iiit.oms.db.util.PostgresConnectionFactory;
 import com.iiit.oms.model.Account;
+import com.iiit.oms.util.EncryptionUtil;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -19,13 +20,14 @@ public class PostgresAccountDatabase {
     }
 
     public void upsert(Account account) {
-        String sql = "INSERT INTO accounts(account_id, account_name, national_identity) VALUES (?, ?, ?) "
-                + "ON CONFLICT (account_id) DO UPDATE SET account_name = EXCLUDED.account_name, national_identity = EXCLUDED.national_identity";
+        String sql = "INSERT INTO accounts(account_id, account_name, national_identity, cash_balance) VALUES (?, ?, ?, ?) "
+                + "ON CONFLICT (account_id) DO UPDATE SET account_name = EXCLUDED.account_name, national_identity = EXCLUDED.national_identity, cash_balance = EXCLUDED.cash_balance";
         try (Connection connection = connectionFactory.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, account.getAccountID());
             statement.setString(2, account.getAccountName());
-            statement.setString(3, account.getNationalIdentity());
+            statement.setString(3, EncryptionUtil.encrypt(account.getNationalIdentity()));
+            statement.setBigDecimal(4, account.getCashBalance());
             statement.executeUpdate();
         } catch (SQLException ex) {
             throw new RuntimeException("Failed to upsert account " + account.getAccountID(), ex);
@@ -33,7 +35,7 @@ public class PostgresAccountDatabase {
     }
 
     public Optional<Account> getById(String accountID) {
-        String sql = "SELECT account_id, account_name, national_identity FROM accounts WHERE account_id = ?";
+        String sql = "SELECT account_id, account_name, national_identity, cash_balance FROM accounts WHERE account_id = ?";
         try (Connection connection = connectionFactory.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, accountID);
@@ -41,7 +43,7 @@ public class PostgresAccountDatabase {
                 if (!rs.next()) {
                     return Optional.empty();
                 }
-                return Optional.of(new Account(rs.getString("account_id"), rs.getString("account_name"), rs.getString("national_identity")));
+                return Optional.of(new Account(rs.getString("account_id"), rs.getString("account_name"), EncryptionUtil.decrypt(rs.getString("national_identity")), rs.getBigDecimal("cash_balance")));
             }
         } catch (SQLException ex) {
             throw new RuntimeException("Failed to find account " + accountID, ex);
@@ -49,13 +51,13 @@ public class PostgresAccountDatabase {
     }
 
     public List<Account> getAll() {
-        String sql = "SELECT account_id, account_name, national_identity FROM accounts";
+        String sql = "SELECT account_id, account_name, national_identity, cash_balance FROM accounts";
         List<Account> results = new ArrayList<>();
         try (Connection connection = connectionFactory.getConnection();
              PreparedStatement statement = connection.prepareStatement(sql);
              ResultSet rs = statement.executeQuery()) {
             while (rs.next()) {
-                results.add(new Account(rs.getString("account_id"), rs.getString("account_name"), rs.getString("national_identity")));
+                results.add(new Account(rs.getString("account_id"), rs.getString("account_name"), EncryptionUtil.decrypt(rs.getString("national_identity")), rs.getBigDecimal("cash_balance")));
             }
             return results;
         } catch (SQLException ex) {

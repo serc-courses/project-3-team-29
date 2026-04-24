@@ -33,13 +33,38 @@ public class OrderManager {
         if (!fundRepository.existsByFundId(order.getProductID())) {
             throw new IllegalStateException("Fund ID " + order.getProductID() + " does not exist");
         }
-        if (!accountRepository.existsByAccountId(order.getAccountID())) {
+        Optional<com.iiit.oms.model.Account> accOpt = accountRepository.findByAccountId(order.getAccountID());
+        if (accOpt.isEmpty()) {
             throw new IllegalStateException("Account ID " + order.getAccountID() + " does not exist");
         }
+        com.iiit.oms.model.Account account = accOpt.get();
+
         if (order.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalStateException("Order amount must be greater than 0, got: " + order.getAmount());
+            throw new IllegalStateException("Order amount must be positive");
         }
-        if (order.getOrderSide() != OrderSide.BUY && order.getOrderSide() != OrderSide.SELL) {
+
+        if (order.getOrderSide() == null || order.getOrderSide() == OrderSide.BUY) {
+            // BUY Validation: Enforce Cash Balances
+            java.util.List<Order> accountOrders = this.orderRepository.findAll().stream()
+                    .filter(o -> o.getAccountID().equals(order.getAccountID()))
+                    .filter(o -> o.getOrderSide() == null || o.getOrderSide() == OrderSide.BUY)
+                    .collect(java.util.stream.Collectors.toList());
+
+            BigDecimal pendingBuyCash = BigDecimal.ZERO;
+            for (Order o : accountOrders) {
+                if (o.getOrderStatus() != com.iiit.oms.model.OrderStatus.BOOKED && o.getOrderStatus() != com.iiit.oms.model.OrderStatus.ERRORED && o.getOrderStatus() != com.iiit.oms.model.OrderStatus.CANCELLED) {
+                    if (o.getAmount() != null && !o.getOrderID().equals(order.getOrderID())) {
+                        pendingBuyCash = pendingBuyCash.add(o.getAmount());
+                    }
+                }
+            }
+
+            BigDecimal availableCash = account.getCashBalance().subtract(pendingBuyCash);
+            if (order.getAmount().compareTo(availableCash) > 0) {
+                throw new IllegalStateException("Insufficient funds. Attempting to buy ₹" 
+                    + order.getAmount() + " but safe available cash is only ₹" + availableCash.setScale(2, java.math.RoundingMode.HALF_UP));
+            }
+        } else if (order.getOrderSide() != OrderSide.SELL) {
             throw new IllegalStateException("Order side must be BUY or SELL, got: " + order.getOrderSide());
         }
 
@@ -50,16 +75,22 @@ public class OrderManager {
                 java.util.List<Order> accountOrders = this.orderRepository.findAll().stream()
                         .filter(o -> o.getAccountID().equals(order.getAccountID()))
                         .filter(o -> o.getProductID().equals(order.getProductID()))
-                        .filter(o -> o.getOrderStatus() == com.iiit.oms.model.OrderStatus.BOOKED)
-                        .filter(o -> o.getAllocatedShares() != null)
                         .collect(java.util.stream.Collectors.toList());
 
-                BigDecimal totalShares = BigDecimal.ZERO;
+                BigDecimal bookedShares = BigDecimal.ZERO;
+                BigDecimal pendingSellAmount = BigDecimal.ZERO;
+
                 for (Order o : accountOrders) {
-                    if (o.getOrderSide() == null || o.getOrderSide() == OrderSide.BUY) {
-                        totalShares = totalShares.add(o.getAllocatedShares());
-                    } else if (o.getOrderSide() == OrderSide.SELL) {
-                        totalShares = totalShares.subtract(o.getAllocatedShares());
+                    if (o.getOrderStatus() == com.iiit.oms.model.OrderStatus.BOOKED && o.getAllocatedShares() != null) {
+                        if (o.getOrderSide() == null || o.getOrderSide() == OrderSide.BUY) {
+                            bookedShares = bookedShares.add(o.getAllocatedShares());
+                        } else if (o.getOrderSide() == OrderSide.SELL) {
+                            bookedShares = bookedShares.subtract(o.getAllocatedShares());
+                        }
+                    } else if (o.getOrderStatus() != com.iiit.oms.model.OrderStatus.ERRORED && o.getOrderStatus() != com.iiit.oms.model.OrderStatus.BOOKED && o.getOrderStatus() != com.iiit.oms.model.OrderStatus.CANCELLED) {
+                        if (o.getOrderSide() == OrderSide.SELL && o.getAmount() != null) {
+                            pendingSellAmount = pendingSellAmount.add(o.getAmount());
+                        }
                     }
                 }
 
@@ -70,15 +101,20 @@ public class OrderManager {
                     throw new IllegalStateException("Cannot sell: missing live NAV for fund " + order.getProductID());
                 }
 
-                BigDecimal maxSellValue = totalShares.multiply(nav).setScale(4, java.math.RoundingMode.HALF_UP);
+                BigDecimal bookedValue = bookedShares.multiply(nav).setScale(4, java.math.RoundingMode.HALF_UP);
+                
+                BigDecimal availableValue = bookedValue.subtract(pendingSellAmount);
+                if (availableValue.compareTo(BigDecimal.ZERO) < 0) {
+                    availableValue = BigDecimal.ZERO;
+                }
 
-                // Allow 1% buffer for market fluctuations during placement
-                BigDecimal bufferedMax = maxSellValue.multiply(new BigDecimal("1.01"));
+                // Allow selling up to 99% of max sell value to prevent short selling when NAV drops
+                BigDecimal safeMaxSellValue = availableValue.multiply(new BigDecimal("0.99")).setScale(4, java.math.RoundingMode.HALF_UP);
 
-                if (order.getAmount().compareTo(bufferedMax) > 0) {
+                if (order.getAmount().compareTo(safeMaxSellValue) > 0) {
                     throw new IllegalStateException("Insufficient balance. Attempting to sell ₹"
-                            + order.getAmount() + " but current portfolio value is only ₹"
-                            + maxSellValue.setScale(2, java.math.RoundingMode.HALF_UP));
+                            + order.getAmount() + " but safe available portfolio value (accounting for pending sells) is only ₹"
+                            + safeMaxSellValue.setScale(2, java.math.RoundingMode.HALF_UP));
                 }
             }
         }

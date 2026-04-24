@@ -10,5 +10,6 @@ public enum OrderStatus {
     CONFIRMED,
     CONTRACTED,
     BOOKED,
-    ERRORED
+    ERRORED,
+    CANCELLED
 }

@@ -38,6 +38,8 @@ public final class PostgresSchemaInitializer {
                 + "account_name VARCHAR(255) NOT NULL,"
                 + "national_identity VARCHAR(255) NOT NULL"
                 + ")");
+                
+        statements.add("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS cash_balance NUMERIC(20, 8) DEFAULT 1000000.00");
 
         statements.add("CREATE TABLE IF NOT EXISTS funds ("
                 + "fund_id VARCHAR(64) PRIMARY KEY,"

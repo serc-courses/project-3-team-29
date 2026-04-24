@@ -8,6 +8,7 @@ export const ROUTES = {
   USERS: '/users',
   RECONCILIATION: '/reconciliation',
   PORTFOLIO: '/portfolio',
+  AGGREGATE_FUNDS: '/aggregate-funds',
 };
 
 export const NAV_ITEMS = [

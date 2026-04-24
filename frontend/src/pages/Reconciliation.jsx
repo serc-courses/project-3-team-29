@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import './Reconciliation.css'
 import { CONFIG } from '../constants/config'
+import { exportToCsv } from '../utils/exportCsv'
 
 export default function Reconciliation() {
     const [breaks, setBreaks] = useState([])
@@ -67,10 +68,10 @@ export default function Reconciliation() {
                         the TA's provided NAV and share allocation. The dollar difference will be absorbed.
                     </p>
                     <div className="recon-modal-detail">
-                        <div>Expected: <strong>${m.expected.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></div>
-                        <div>Received: <strong>${m.received.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></div>
+                        <div>Expected: <strong>₹{m.expected.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></div>
+                        <div>Received: <strong>₹{m.received.toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong></div>
                         <div className="diff-value">
-                            Difference: ${m.diff.toLocaleString(undefined, { minimumFractionDigits: 2 })} ({m.pct}%)
+                            Difference: ₹{m.diff.toLocaleString(undefined, { minimumFractionDigits: 2 })} ({m.pct}%)
                         </div>
                     </div>
                     <p className="recon-modal-warn">
@@ -152,6 +153,9 @@ export default function Reconciliation() {
                         />
                         Show resolved
                     </label>
+                    <button className="recon-refresh-btn" onClick={() => exportToCsv('reconciliation_breaks.csv', breaks)} disabled={breaks.length === 0}>
+                        ⤓ Export CSV
+                    </button>
                     <button className="recon-refresh-btn" onClick={fetchBreaks}>
                         ↻ Refresh
                     </button>
@@ -186,9 +190,9 @@ export default function Reconciliation() {
                                     <th>Break ID</th>
                                     <th>Bulk Order</th>
                                     <th>Type</th>
-                                    <th style={{ textAlign: 'right' }}>Expected ($)</th>
-                                    <th style={{ textAlign: 'right' }}>Received ($)</th>
-                                    <th style={{ textAlign: 'right' }}>Difference ($)</th>
+                                    <th style={{ textAlign: 'right' }}>Expected (₹)</th>
+                                    <th style={{ textAlign: 'right' }}>Received (₹)</th>
+                                    <th style={{ textAlign: 'right' }}>Difference (₹)</th>
                                     <th>Detected At</th>
                                     <th style={{ textAlign: 'center' }}>Status</th>
                                     <th style={{ textAlign: 'center' }}>Actions</th>
@@ -217,14 +221,14 @@ export default function Reconciliation() {
                                                 </span>
                                             </td>
                                             <td style={{ textAlign: 'right' }}>
-                                                ${expected.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                ₹{expected.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                             </td>
                                             <td style={{ textAlign: 'right' }}>
-                                                ${received.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                                ₹{received.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                             </td>
                                             <td style={{ textAlign: 'right' }}>
                                                 <span className="diff-value">
-                                                    ${diff.toLocaleString(undefined, { minimumFractionDigits: 2 })} ({pct}%)
+                                                    ₹{diff.toLocaleString(undefined, { minimumFractionDigits: 2 })} ({pct}%)
                                                 </span>
                                             </td>
                                             <td>

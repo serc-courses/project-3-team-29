@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { cancelOrder } from '../../api/ordersApi'
 import StatusPill from '../StatusPill/StatusPill'
 import { formatCurrency } from '../../utils/formatters'
 import { SIDE_COLORS } from '../../constants/statusColors'
@@ -6,6 +8,22 @@ import './OrderCard.css'
 
 export default function OrderCard({ order, onClick }) {
   const sideColors = SIDE_COLORS[order.orderSide] || { text: '#64748B', bg: '#F1F5F9' }
+  const [cancelling, setCancelling] = useState(false)
+  const canCancel = ['PLANNED', 'VALIDATED', 'ENRICHED', 'PLACED'].includes(order.orderStatus)
+
+  const handleCancel = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!window.confirm("Are you sure you want to cancel this order?")) return;
+    setCancelling(true);
+    try {
+        await cancelOrder(order.orderID);
+    } catch(err) {
+        alert("Failed to cancel order: " + (err.response?.data?.message || err.message));
+    } finally {
+        setCancelling(false);
+    }
+  }
 
   const content = (
     <div className="order-card card card-interactive card-elevated">
@@ -24,7 +42,19 @@ export default function OrderCard({ order, onClick }) {
       </div>
       <div className="order-card-bottom">
         <span className="order-card-account font-mono text-muted">{order.accountID}</span>
-        <StatusPill status={order.orderStatus} />
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {canCancel && (
+            <button 
+              className="btn btn-outline" 
+              style={{ padding: '0 8px', fontSize: '11px', height: '24px', minHeight: '24px', borderColor: 'var(--color-error)', color: 'var(--color-error)' }}
+              onClick={handleCancel}
+              disabled={cancelling}
+            >
+              {cancelling ? '...' : 'Cancel'}
+            </button>
+          )}
+          <StatusPill status={order.orderStatus} />
+        </div>
       </div>
     </div>
   )

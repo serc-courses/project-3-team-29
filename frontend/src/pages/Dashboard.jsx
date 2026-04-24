@@ -142,7 +142,11 @@ export default function Dashboard({ sseEventCount }) {
   const histogramData = useMemo(() =>
     AMOUNT_BUCKETS.map(b => ({
       label: b.label,
-      count: orders.filter(o => (o.amount || 0) >= b.min && (o.amount || 0) < b.max).length,
+      count: orders.filter(o => 
+          !['FAILED', 'ERRORED'].includes(o.orderStatus) &&
+          o.orderSide !== 'SELL' &&
+          (o.amount || 0) >= b.min && (o.amount || 0) < b.max
+      ).length,
     })),
   [orders])
 
@@ -172,6 +176,7 @@ export default function Dashboard({ sseEventCount }) {
   const amountByAccountData = useMemo(() => {
     const acctMap = {}
     orders.forEach(o => {
+      if (o.orderSide === 'SELL' || ['FAILED', 'ERRORED'].includes(o.orderStatus)) return;
       const acct = o.accountID || 'Unknown'
       acctMap[acct] = (acctMap[acct] || 0) + (o.amount || 0)
     })

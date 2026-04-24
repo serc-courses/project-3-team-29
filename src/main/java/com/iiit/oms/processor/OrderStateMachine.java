@@ -58,6 +58,20 @@ public class OrderStateMachine {
         return order;
     }
 
+    public Order cancel(Order order) {
+        Objects.requireNonNull(order, "order must not be null");
+        OrderStatus status = order.getOrderStatus();
+        if (status == OrderStatus.BULKED || status == OrderStatus.TRANSMITTED || status == OrderStatus.CONFIRMED || status == OrderStatus.CONTRACTED || status == OrderStatus.BOOKED) {
+            throw new IllegalStateException("Order has already batched. Cannot cancel order in status: " + status);
+        }
+        if (status == OrderStatus.CANCELLED) {
+            return order; // Already cancelled
+        }
+        order.setOrderStatus(OrderStatus.CANCELLED);
+        writeAuditLog(order.getOrderID(), status, OrderStatus.CANCELLED, "OrderStateMachine", "User Cancelled");
+        return order;
+    }
+
     /**
      * Advance order from CONFIRMED → CONTRACTED (once contract callback received with NAV/shares).
      * Called by the ContractCallbackHandler in the REST server.

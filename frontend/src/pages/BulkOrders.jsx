@@ -7,6 +7,7 @@ import StatusBadge from '../components/StatusBadge/StatusBadge'
 import { formatCurrency, formatQuantity } from '../utils/formatters'
 import { BULK_ORDER_STATUS, ORDER_SIDE } from '../constants/orderStatus'
 import { CONFIG } from '../constants/config'
+import { exportToCsv } from '../utils/exportCsv'
 
 const STATUS_OPTIONS = Object.values(BULK_ORDER_STATUS).map((s) => ({ value: s, label: s }))
 const SIDE_OPTIONS = Object.values(ORDER_SIDE).map((s) => ({ value: s, label: s }))
@@ -156,8 +157,18 @@ export default function BulkOrders({ sseEventCount = 0 }) {
         searchValue={search}
         onSearchChange={setSearch}
       />
-      <div className="bulk-orders-count">
-        Showing {filtered.length} of {bulkOrders.length} bulk orders
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+        <div className="bulk-orders-count" style={{ margin: 0 }}>
+          Showing {filtered.length} of {bulkOrders.length} bulk orders
+        </div>
+        <button 
+          className="recon-refresh-btn" 
+          onClick={() => exportToCsv('bulk_orders.csv', filtered)} 
+          disabled={filtered.length === 0}
+          style={{ padding: '6px 12px', fontSize: '12px', background: 'white', border: '1px solid #ccc', borderRadius: '4px', cursor: filtered.length ? 'pointer' : 'not-allowed', opacity: filtered.length ? 1 : 0.6 }}
+        >
+          ⤓ Export CSV
+        </button>
       </div>
       <div className="card" style={{ padding: 0 }}>
         <div style={{ overflowX: 'auto' }}>

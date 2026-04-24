@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getOrders } from '../../api/ordersApi'
+import { getPortfolio } from '../../api'
 import { useFetch } from '../../hooks/useFetch'
 import { useAuth } from '../../context/AuthContext'
 import OrderCard from '../../components/OrderCard/OrderCard'
@@ -61,8 +62,16 @@ export default function Home({ sseEventCount = 0 }) {
   )
   const orders = rawOrders || []
 
+  const { data: portfolioData } = useFetch(
+    () => accountID ? getPortfolio(accountID) : Promise.resolve(null),
+    [sseEventCount, accountID]
+  )
+
   const stats = useMemo(() => {
-    const totalInvested = orders.reduce((sum, o) => sum + (o.amount || 0), 0)
+    const totalInvested = orders.reduce((sum, o) => {
+      if (o.orderSide === 'SELL' || STATUS_GROUP.FAILED.includes(o.orderStatus)) return sum;
+      return sum + (o.amount || 0);
+    }, 0)
     const uniqueFunds = new Set(orders.map(o => o.fundID).filter(Boolean)).size
     const completed = orders.filter(o => STATUS_GROUP.COMPLETED.includes(o.orderStatus)).length
     const pending = orders.filter(o => STATUS_GROUP.PENDING.includes(o.orderStatus)).length
@@ -103,9 +112,17 @@ export default function Home({ sseEventCount = 0 }) {
 
       {/* Hero investment card */}
       <div className="home-hero-card card card-elevated">
-        <p className="home-hero-label">Total Invested</p>
+        <p className="home-hero-label">Total Invested (Active + Pending)</p>
         <AmountDisplay amount={stats.totalInvested} size="lg" />
-        <p className="home-hero-meta">
+
+        {portfolioData && portfolioData.availableCash !== undefined && (
+          <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px dashed var(--color-core-neutral-200)' }}>
+            <p className="home-hero-label" style={{ marginBottom: '4px' }}>Available Cash</p>
+            <AmountDisplay amount={portfolioData.availableCash} size="md" />
+          </div>
+        )}
+
+        <p className="home-hero-meta" style={{ marginTop: '16px' }}>
           {orders.length} orders &middot; {stats.uniqueFunds} funds
         </p>
       </div>

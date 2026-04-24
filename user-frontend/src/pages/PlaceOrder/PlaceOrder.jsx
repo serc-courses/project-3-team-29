@@ -68,9 +68,9 @@ export default function PlaceOrder() {
         errs.fundID = 'You do not own any shares of this fund to sell'
       } else {
         const maxValue = holding.currentValue
-        // Allow tiny buffer for decimal rounding
-        if (Number(amount) > Number(maxValue) * 1.01) {
-          errs.amount = `Insufficient holdings. Max sell value: ₹${formatCurrency(maxValue)}`
+        const safeMaxSellValue = Number(maxValue) * 0.99
+        if (Number(amount) > safeMaxSellValue) {
+          errs.amount = `Insufficient holdings. Max safe sell value (99%): ₹${formatCurrency(safeMaxSellValue)}`
         }
       }
     }
@@ -158,11 +158,16 @@ export default function PlaceOrder() {
               placeholder="0.00"
               value={amount}
               min="1"
-              step="100"
+              step="0.01"
               onChange={e => { setAmount(e.target.value); setErrors(p => ({ ...p, amount: '' })) }}
             />
           </div>
           {errors.amount && <p className="input-error-text">{errors.amount}</p>}
+          {side === 'BUY' && portfolio && portfolio.availableCash !== undefined && (
+            <p style={{ fontSize: '12px', color: '#64748B', marginTop: 4 }}>
+              Available Cash: ₹{formatCurrency(portfolio.availableCash)}
+            </p>
+          )}
           {side === 'SELL' && fundID && portfolio?.holdings?.find(h => h.fundID === fundID) && (
             <p style={{ fontSize: '12px', color: '#64748B', marginTop: 4 }}>
               Available to sell: ~₹{formatCurrency(portfolio.holdings.find(h => h.fundID === fundID).currentValue)}

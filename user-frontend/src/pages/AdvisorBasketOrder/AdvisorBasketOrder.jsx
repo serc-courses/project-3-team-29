@@ -124,7 +124,7 @@ export default function AdvisorBasketOrder({ advisorId }) {
               <label className="input-label">Amount (₹)</label>
               <div className="amount-input-wrap">
                 <span className="amount-prefix">₹</span>
-                <input type="number" inputMode="decimal" className={`input amount-input${errors[`${row.id}_amount`] ? ' input-error' : ''}`} placeholder="0.00" value={row.amount} min="1" step="100" onChange={e => updateRow(row.id, 'amount', e.target.value)} />
+                <input type="number" inputMode="decimal" className={`input amount-input${errors[`${row.id}_amount`] ? ' input-error' : ''}`} placeholder="0.00" value={row.amount} min="1" step="0.01" onChange={e => updateRow(row.id, 'amount', e.target.value)} />
               </div>
               {errors[`${row.id}_amount`] && <p className="input-error-text">{errors[`${row.id}_amount`]}</p>}
             </div>

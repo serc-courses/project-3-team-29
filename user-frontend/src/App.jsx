@@ -11,6 +11,7 @@ import Home from './pages/Home/Home'
 import Orders from './pages/Orders/Orders'
 import OrderDetail from './pages/OrderDetail/OrderDetail'
 import PlaceOrder from './pages/PlaceOrder/PlaceOrder'
+import Transactions from './pages/Transactions/Transactions'
 import Funds from './pages/Funds/Funds'
 import FundDetail from './pages/FundDetail/FundDetail'
 import Account from './pages/Account/Account'
@@ -46,6 +47,7 @@ function AppContent() {
           <Route path="/orders" element={<ProtectedRoute><Orders sseEventCount={eventCount} /></ProtectedRoute>} />
           <Route path="/orders/new" element={<ProtectedRoute><PlaceOrder /></ProtectedRoute>} />
           <Route path="/orders/:orderId" element={<ProtectedRoute><OrderDetail sseEventCount={eventCount} /></ProtectedRoute>} />
+          <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
           <Route path="/funds" element={<ProtectedRoute><Funds /></ProtectedRoute>} />
           <Route path="/funds/:fundId" element={<ProtectedRoute><FundDetail /></ProtectedRoute>} />
           <Route path="/portfolio" element={<ProtectedRoute><Portfolio sseEventCount={eventCount} /></ProtectedRoute>} />

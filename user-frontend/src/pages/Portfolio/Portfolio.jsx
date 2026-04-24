@@ -66,14 +66,14 @@ export default function Portfolio({ sseEventCount }) {
                 <p className="pf-hero-label">Total Profit / Loss</p>
                 <div className="pf-hero-value-wrap">
                     <span className="pf-hero-value">
-                        {isPositive ? '+' : ''}${fmt(totalPnl)}
+                        {isPositive ? '+' : ''}₹{fmt(totalPnl)}
                     </span>
                     <span className="pf-hero-pct badge">
                         {isPositive ? '▲' : '▼'} {fmtPct(Math.abs(totalPnlPct))}%
                     </span>
                 </div>
                 <p className="pf-hero-meta">
-                    Current Value: ${fmt(totalCurrent)} &middot; Invested: ${fmt(totalInvested)}
+                    Current Value: ₹{fmt(totalCurrent)} &middot; Invested: ₹{fmt(totalInvested)}
                 </p>
             </div>
 
@@ -103,7 +103,7 @@ export default function Portfolio({ sseEventCount }) {
                                             <div className="pf-holding-id">{h.fundID}</div>
                                         </div>
                                         <div className={`pf-holding-pnl ${hPos ? 'text-green' : 'text-red'}`}>
-                                            {hPos ? '+' : ''}${fmt(hPnl)}
+                                            {hPos ? '+' : ''}₹{fmt(hPnl)}
                                             <div className="pf-holding-pnl-pct">{hPos ? '▲' : '▼'} {fmtPct(Math.abs(hPct))}%</div>
                                         </div>
                                     </div>
@@ -117,11 +117,11 @@ export default function Portfolio({ sseEventCount }) {
                                         </div>
                                         <div className="pf-holding-stat">
                                             <span className="pf-hs-label">Buy NAV</span>
-                                            <span className="pf-hs-val">${fmt(h.buyNav)}</span>
+                                            <span className="pf-hs-val">₹{fmt(h.buyNav)}</span>
                                         </div>
                                         <div className="pf-holding-stat">
                                             <span className="pf-hs-label">Current NAV</span>
-                                            <span className="pf-hs-val font-mono">${fmt(h.currentNav)}</span>
+                                            <span className="pf-hs-val font-mono">₹{fmt(h.currentNav)}</span>
                                         </div>
                                     </div>
                                 </div>

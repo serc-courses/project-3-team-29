@@ -70,16 +70,16 @@ export default function Portfolio() {
             <div className="pf-summary">
                 <div className="pf-summary-card">
                     <div className="pf-summary-label">Total Invested</div>
-                    <div className="pf-summary-value">${fmt(totalInvested)}</div>
+                    <div className="pf-summary-value">₹{fmt(totalInvested)}</div>
                 </div>
                 <div className="pf-summary-card">
                     <div className="pf-summary-label">Current Value</div>
-                    <div className="pf-summary-value">${fmt(totalCurrent)}</div>
+                    <div className="pf-summary-value">₹{fmt(totalCurrent)}</div>
                 </div>
                 <div className={`pf-summary-card pf-summary-pnl ${pnlClass}`}>
                     <div className="pf-summary-label">Total P/L</div>
                     <div className="pf-summary-value">
-                        {totalPnl >= 0 ? '+' : ''}${fmt(totalPnl)}
+                        {totalPnl >= 0 ? '+' : ''}₹{fmt(totalPnl)}
                         <span className="pf-summary-pct"> ({totalPnl >= 0 ? '+' : ''}{fmtPct(totalPnlPct)}%)</span>
                     </div>
                 </div>
@@ -107,12 +107,12 @@ export default function Portfolio() {
                                 <tr>
                                     <th>Account</th>
                                     <th>Fund</th>
-                                    <th style={{ textAlign: 'right' }}>Invested ($)</th>
+                                    <th style={{ textAlign: 'right' }}>Invested (₹)</th>
                                     <th style={{ textAlign: 'right' }}>Buy NAV</th>
                                     <th style={{ textAlign: 'right' }}>Shares</th>
                                     <th style={{ textAlign: 'right' }}>Current NAV</th>
-                                    <th style={{ textAlign: 'right' }}>Current Value ($)</th>
-                                    <th style={{ textAlign: 'right' }}>P/L ($)</th>
+                                    <th style={{ textAlign: 'right' }}>Current Value (₹)</th>
+                                    <th style={{ textAlign: 'right' }}>P/L (₹)</th>
                                     <th style={{ textAlign: 'right' }}>P/L %</th>
                                 </tr>
                             </thead>
@@ -131,16 +131,16 @@ export default function Portfolio() {
                                                     <span className="pf-fund-name">{h.fundName}</span>
                                                 </div>
                                             </td>
-                                            <td style={{ textAlign: 'right' }}>${fmt(h.investedAmount)}</td>
-                                            <td style={{ textAlign: 'right' }}>${fmt(h.buyNav)}</td>
+                                            <td style={{ textAlign: 'right' }}>₹{fmt(h.investedAmount)}</td>
+                                            <td style={{ textAlign: 'right' }}>₹{fmt(h.buyNav)}</td>
                                             <td style={{ textAlign: 'right' }}>{parseFloat(h.allocatedShares || 0).toFixed(4)}</td>
                                             <td style={{ textAlign: 'right' }}>
-                                                <span className="pf-live-nav">${fmt(h.currentNav)}</span>
+                                                <span className="pf-live-nav">₹{fmt(h.currentNav)}</span>
                                             </td>
-                                            <td style={{ textAlign: 'right' }}>${fmt(h.currentValue)}</td>
+                                            <td style={{ textAlign: 'right' }}>₹{fmt(h.currentValue)}</td>
                                             <td style={{ textAlign: 'right' }}>
                                                 <span className={cls}>
-                                                    {pnl >= 0 ? '+' : ''}${fmt(pnl)}
+                                                    {pnl >= 0 ? '+' : ''}₹{fmt(pnl)}
                                                 </span>
                                             </td>
                                             <td style={{ textAlign: 'right' }}>

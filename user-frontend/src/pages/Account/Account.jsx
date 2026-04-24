@@ -261,6 +261,12 @@ export default function Account() {
               </div>
             )}
           </div>
+
+          <div style={{ marginTop: 'var(--sp-2)', marginBottom: 'var(--sp-4)' }}>
+            <button className="btn btn-outline btn-full" onClick={() => navigate('/transactions')}>
+              View Historical Ledger →
+            </button>
+          </div>
         </>
       )}
 
