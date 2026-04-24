@@ -1795,17 +1795,25 @@ public class OrderRestServer implements SseBroadcaster {
                         orderRepository.save(order);
 
                         // CASH MANAGEMENT: Debit or Credit upon finalized booking
+                        // For BUY: deduct the original order amount (what the user paid), not
+                        // allocatedShares × nav (which may differ if TA allocated at a discounted NAV).
+                        // For SELL: credit the actual proceeds = allocatedShares × nav.
                         if (accountRepository != null && order.getAllocatedShares() != null && nav != null) {
                             Optional<com.iiit.oms.model.Account> accOpt = accountRepository
                                     .findByAccountId(order.getAccountID());
                             if (accOpt.isPresent()) {
                                 com.iiit.oms.model.Account acc = accOpt.get();
-                                BigDecimal executedAmount = order.getAllocatedShares().multiply(nav).setScale(4,
-                                        java.math.RoundingMode.HALF_UP);
                                 if (order.getOrderSide() == null
                                         || order.getOrderSide() == com.iiit.oms.model.OrderSide.BUY) {
-                                    acc.setCashBalance(acc.getCashBalance().subtract(executedAmount));
+                                    // Deduct what the user actually placed the order for
+                                    BigDecimal debitAmount = order.getAmount() != null
+                                            ? order.getAmount().setScale(4, java.math.RoundingMode.HALF_UP)
+                                            : order.getAllocatedShares().multiply(nav).setScale(4, java.math.RoundingMode.HALF_UP);
+                                    acc.setCashBalance(acc.getCashBalance().subtract(debitAmount));
                                 } else if (order.getOrderSide() == com.iiit.oms.model.OrderSide.SELL) {
+                                    // Credit actual proceeds received from TA
+                                    BigDecimal executedAmount = order.getAllocatedShares().multiply(nav).setScale(4,
+                                            java.math.RoundingMode.HALF_UP);
                                     acc.setCashBalance(acc.getCashBalance().add(executedAmount));
                                 }
                                 accountRepository.save(acc);
@@ -1933,12 +1941,17 @@ public class OrderRestServer implements SseBroadcaster {
                                         .findByAccountId(order.getAccountID());
                                 if (accOpt.isPresent()) {
                                     com.iiit.oms.model.Account acc = accOpt.get();
-                                    BigDecimal executedAmount = order.getAllocatedShares().multiply(nav).setScale(4,
-                                            java.math.RoundingMode.HALF_UP);
                                     if (order.getOrderSide() == null
                                             || order.getOrderSide() == com.iiit.oms.model.OrderSide.BUY) {
-                                        acc.setCashBalance(acc.getCashBalance().subtract(executedAmount));
+                                        // Deduct what the user actually placed the order for
+                                        BigDecimal debitAmount = order.getAmount() != null
+                                                ? order.getAmount().setScale(4, java.math.RoundingMode.HALF_UP)
+                                                : order.getAllocatedShares().multiply(nav).setScale(4, java.math.RoundingMode.HALF_UP);
+                                        acc.setCashBalance(acc.getCashBalance().subtract(debitAmount));
                                     } else if (order.getOrderSide() == com.iiit.oms.model.OrderSide.SELL) {
+                                        // Credit actual proceeds received from TA
+                                        BigDecimal executedAmount = order.getAllocatedShares().multiply(nav).setScale(4,
+                                                java.math.RoundingMode.HALF_UP);
                                         acc.setCashBalance(acc.getCashBalance().add(executedAmount));
                                     }
                                     accountRepository.save(acc);
@@ -2305,15 +2318,20 @@ public class OrderRestServer implements SseBroadcaster {
                         affectedOrders++;
 
                         // CASH MANAGEMENT: Debit or Credit upon ACCEPT-forced booking
-                        // (same logic as ContractCallbackHandler for normal booking)
+                        // For BUY: deduct the original order amount (what the user paid), not
+                        // allocatedShares × nav (which may differ if TA allocated at a discounted NAV).
+                        // For SELL: credit the actual proceeds = allocatedShares × nav.
                         if (accountRepository != null && order.getAllocatedShares() != null && order.getNav() != null) {
                             Optional<com.iiit.oms.model.Account> accOpt = accountRepository.findByAccountId(order.getAccountID());
                             if (accOpt.isPresent()) {
                                 com.iiit.oms.model.Account acc = accOpt.get();
-                                BigDecimal executedAmount = order.getAllocatedShares().multiply(order.getNav()).setScale(4, java.math.RoundingMode.HALF_UP);
                                 if (order.getOrderSide() == null || order.getOrderSide() == com.iiit.oms.model.OrderSide.BUY) {
-                                    acc.setCashBalance(acc.getCashBalance().subtract(executedAmount));
+                                    BigDecimal debitAmount = order.getAmount() != null
+                                            ? order.getAmount().setScale(4, java.math.RoundingMode.HALF_UP)
+                                            : order.getAllocatedShares().multiply(order.getNav()).setScale(4, java.math.RoundingMode.HALF_UP);
+                                    acc.setCashBalance(acc.getCashBalance().subtract(debitAmount));
                                 } else if (order.getOrderSide() == com.iiit.oms.model.OrderSide.SELL) {
+                                    BigDecimal executedAmount = order.getAllocatedShares().multiply(order.getNav()).setScale(4, java.math.RoundingMode.HALF_UP);
                                     acc.setCashBalance(acc.getCashBalance().add(executedAmount));
                                 }
                                 accountRepository.save(acc);
