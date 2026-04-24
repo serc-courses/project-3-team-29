@@ -25,6 +25,8 @@ public class OrderView {
     // Contract fields
     private String contractRef;
     private BigDecimal allocatedShares;
+    // Creation timestamp (epoch millis) for chronological sorting
+    private long createdAt;
 
     public OrderView() {
     }
@@ -92,6 +94,9 @@ public class OrderView {
 
     public BigDecimal getAllocatedShares() { return allocatedShares; }
     public void setAllocatedShares(BigDecimal allocatedShares) { this.allocatedShares = allocatedShares; }
+
+    public long getCreatedAt() { return createdAt; }
+    public void setCreatedAt(long createdAt) { this.createdAt = createdAt; }
 
     @Override
     public String toString() {

@@ -67,7 +67,7 @@ export default function Orders({ sseEventCount = 0 }) {
     const f = FILTERS.find(f => f.key === activeFilter)
     if (f?.statuses) list = list.filter(o => f.statuses.includes(o.orderStatus))
     if (search.trim()) list = list.filter(o => o.orderID?.toLowerCase().includes(search.toLowerCase()))
-    return [...list].sort((a, b) => b.orderID?.localeCompare(a.orderID))
+    return [...list].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
   }, [orders, activeFilter, search])
 
   if (loading) return <SkeletonOrders />

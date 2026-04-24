@@ -149,7 +149,7 @@ export default function Orders({ sseEventCount = 0 }) {
       if (fundFilter && o.fundID !== fundFilter) return false
       if (search && !o.orderID?.toLowerCase().includes(search.toLowerCase())) return false
       return true
-    })
+    }).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
   }, [orders, statusFilter, accountFilter, sideFilter, fundFilter, search])
 
   if (loading) {

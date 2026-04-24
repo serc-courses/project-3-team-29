@@ -500,7 +500,7 @@ public class OrderRestServer implements SseBroadcaster {
                     .filter(o -> targetAccountId == null || targetAccountId.equals(o.getAccountID()))
                     .collect(java.util.stream.Collectors.toList());
 
-            transactions.sort(Comparator.comparing(Order::getOrderID).reversed());
+            transactions.sort(Comparator.comparing((Order o) -> o.getTradeDate() != null ? o.getTradeDate() : "").reversed());
             sendJsonResponse(exchange, 200, transactions);
         }
     }
@@ -1101,6 +1101,9 @@ public class OrderRestServer implements SseBroadcaster {
                                 .filter(Objects::nonNull)
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
                         Map<String, Long> sideCounts = fundOrders.stream()
+                            .filter(o -> !"ERRORED".equals(o.getOrderStatus())
+                                    && !"FAILED".equals(o.getOrderStatus())
+                                    && !"CANCELLED".equals(o.getOrderStatus()))
                             .collect(Collectors.groupingBy(
                                 o -> o.getOrderSide() != null ? o.getOrderSide() : "UNKNOWN",
                                 Collectors.counting()));

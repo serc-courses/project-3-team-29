@@ -66,10 +66,11 @@ public class KafkaNotificationConsumer implements Runnable {
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
             consumer.subscribe(List.of(
                     KafkaOrderEventPublisher.TOPIC_ORDER_BOOKED,
-                    KafkaOrderEventPublisher.TOPIC_ORDER_STATE
+                    KafkaOrderEventPublisher.TOPIC_ORDER_STATE,
+                    KafkaOrderEventPublisher.TOPIC_NAV_UPDATED
             ));
             enabled = true;
-            LOGGER.info("KafkaNotificationConsumer started, subscribed to [oms.orders.booked, oms.orders.state]");
+            LOGGER.info("KafkaNotificationConsumer started, subscribed to [oms.orders.booked, oms.orders.state, oms.nav.updated]");
 
             while (running) {
                 try {
@@ -102,6 +103,9 @@ public class KafkaNotificationConsumer implements Runnable {
                 if (record.topic().contains("bulk") || "BULK_ORDER_CREATED".equals(eventType)
                         || "BULK_ORDER_TRANSMITTED".equals(eventType)) {
                     sseEventType = "bulk-order-updated";
+                } else if (KafkaOrderEventPublisher.TOPIC_NAV_UPDATED.equals(record.topic())
+                        || "NAV_UPDATED".equals(eventType)) {
+                    sseEventType = "nav-updated";
                 }
                 sseBroadcaster.broadcastRawEvent(sseEventType, record.value());
             }

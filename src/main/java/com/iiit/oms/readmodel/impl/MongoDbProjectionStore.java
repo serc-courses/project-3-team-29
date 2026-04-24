@@ -75,6 +75,7 @@ public class MongoDbProjectionStore implements ProjectionStore {
         view.setSettlementDate(order.getSettlementDate());
         view.setContractRef(order.getContractRef());
         view.setAllocatedShares(order.getAllocatedShares());
+        view.setCreatedAt(System.currentTimeMillis());
         saveOrderView(view);
     }
 
@@ -256,7 +257,8 @@ public class MongoDbProjectionStore implements ProjectionStore {
                 .append("tradeDate", view.getTradeDate())
                 .append("settlementDate", view.getSettlementDate())
                 .append("contractRef", view.getContractRef())
-                .append("allocatedShares", view.getAllocatedShares());
+                .append("allocatedShares", view.getAllocatedShares())
+                .append("createdAt", view.getCreatedAt());
     }
 
     private OrderView documentToOrderView(Document doc) {
@@ -283,6 +285,8 @@ public class MongoDbProjectionStore implements ProjectionStore {
         if (doc.get("allocatedShares", org.bson.types.Decimal128.class) != null) {
             view.setAllocatedShares(doc.get("allocatedShares", org.bson.types.Decimal128.class).bigDecimalValue());
         }
+        Long createdAt = doc.getLong("createdAt");
+        if (createdAt != null) view.setCreatedAt(createdAt);
         return view;
     }
 

@@ -62,6 +62,13 @@ export default function PlaceOrder() {
     if (!fundID) errs.fundID = 'Please select a fund'
     if (!amount || Number(amount) <= 0) errs.amount = 'Amount must be greater than 0'
 
+    if (side === 'BUY' && amount && Number(amount) > 0) {
+      const available = portfolio?.availableCash
+      if (available !== undefined && Number(amount) > Number(available)) {
+        errs.amount = `Insufficient funds. Available cash: ₹${formatCurrency(available)}`
+      }
+    }
+
     if (side === 'SELL' && fundID && amount) {
       const holding = portfolio?.holdings?.find(h => h.fundID === fundID)
       if (!holding || holding.allocatedShares <= 0) {

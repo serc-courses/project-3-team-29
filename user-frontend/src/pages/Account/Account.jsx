@@ -91,7 +91,7 @@ export default function Account() {
 
   const totalAmount   = useMemo(() => orders.reduce((s, o) => s + (o.amount   || 0), 0), [orders])
   const totalQuantity = useMemo(() => orders.reduce((s, o) => s + (o.quantity || 0), 0), [orders])
-  const recentOrders  = useMemo(() => [...orders].sort((a, b) => b.orderID?.localeCompare(a.orderID)).slice(0, 5), [orders])
+  const recentOrders  = useMemo(() => [...orders].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)).slice(0, 5), [orders])
 
   /* Advisor derived data */
   const advisorDonutData = useMemo(() => {
@@ -270,12 +270,6 @@ export default function Account() {
         </>
       )}
 
-      {/* App info */}
-      <div className="card account-info-card">
-        <p className="account-info-title">{CONFIG.APP_NAME}</p>
-        <p className="account-info-row">Version: v1.0</p>
-        <p className="account-info-row">Backend: localhost:8080</p>
-      </div>
     </div>
   )
 }

@@ -77,10 +77,6 @@ export default function Portfolio({ sseEventCount }) {
                 </p>
             </div>
 
-            <div className="pf-disclaimer">
-                NAV is updated by admin. Portfolio refreshes automatically via SSE when NAV changes.
-            </div>
-
             <div className="section">
                 <h2 className="section-title">Your Holdings</h2>
 

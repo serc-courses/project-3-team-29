@@ -193,12 +193,10 @@ export default function Funds() {
                 disabled={updating || !newNav || Number(newNav) <= 0}
                 onClick={handleNavUpdate}
               >
-                {updating ? 'Updating...' : 'Update NAV via Kafka'}
+                {updating ? 'Updating...' : 'Update'}
               </button>
             </div>
-            <p className="nav-modal-hint">
-              This will update the fund NAV in the database and publish a <code>oms.nav.updated</code> event to Kafka.
-            </p>
+
           </div>
         </div>
       )}

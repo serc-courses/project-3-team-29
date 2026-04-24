@@ -37,6 +37,7 @@ public class InMemoryProjectionStore implements ProjectionStore {
         view.setSettlementDate(order.getSettlementDate());
         view.setContractRef(order.getContractRef());
         view.setAllocatedShares(order.getAllocatedShares());
+        view.setCreatedAt(System.currentTimeMillis());
         orderViews.put(order.getOrderID(), view);
     }
 
