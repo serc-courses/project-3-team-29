@@ -40,6 +40,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class OrderRestServerTest {
 
+    static {
+        // Force plain HTTP in tests — keystore path set to non-existent so createServer falls back
+        System.setProperty("OMS_KEYSTORE_PATH", "nonexistent-for-test");
+    }
+
+    // Admin JWT pre-generated so all test requests pass RBAC
+    private static final String ADMIN_TOKEN = buildAdminToken();
+
+    private static String buildAdminToken() {
+        com.iiit.oms.model.User admin = new com.iiit.oms.model.User();
+        admin.setUserID("test-admin");
+        admin.setUsername("test-admin");
+        admin.setRole("ADMIN");
+        return new com.iiit.oms.auth.JwtService(new com.iiit.oms.auth.InMemoryRevocationStore())
+                .generateToken(admin);
+    }
+
+    private static HttpRequest auth(HttpRequest.Builder b) {
+        return b.header("Authorization", "Bearer " + ADMIN_TOKEN).build();
+    }
+
     @Test
     void shouldAcceptOrderListAndStoreOrders() throws Exception {
         InMemoryOrderDatabase database = new InMemoryOrderDatabase();
@@ -517,155 +538,114 @@ class OrderRestServerTest {
 
     private HttpResponse<String> postJson(int port, String payload) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
+        HttpRequest request = auth(HttpRequest.newBuilder()
                 .uri(new URI("http://localhost:" + port + "/orders/plan"))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(payload))
-                .build();
-
+                .POST(HttpRequest.BodyPublishers.ofString(payload)));
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> getOrders(int port) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost:" + port + "/orders"))
-                .GET()
-                .build();
-
+        HttpRequest request = auth(HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/orders")).GET());
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> getOrderStatus(int port, String orderID) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost:" + port + "/orders/status?orderID=" + orderID))
-                .GET()
-                .build();
-
+        HttpRequest request = auth(HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/orders/status?orderID=" + orderID)).GET());
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> getOrderStatusWithoutOrderId(int port) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost:" + port + "/orders/status"))
-                .GET()
-                .build();
-
+        HttpRequest request = auth(HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/orders/status")).GET());
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> postConfirm(int port) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
+        HttpRequest request = auth(HttpRequest.newBuilder()
                 .uri(new URI("http://localhost:" + port + "/orders/confirm"))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString("{}"))
-                .build();
-
+                .POST(HttpRequest.BodyPublishers.ofString("{}")));
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> getConfirm(int port) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost:" + port + "/orders/confirm"))
-                .GET()
-                .build();
-
+        HttpRequest request = auth(HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/orders/confirm")).GET());
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> postBook(int port) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
+        HttpRequest request = auth(HttpRequest.newBuilder()
                 .uri(new URI("http://localhost:" + port + "/orders/book"))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString("{}"))
-                .build();
-
+                .POST(HttpRequest.BodyPublishers.ofString("{}")));
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> getBook(int port) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost:" + port + "/orders/book"))
-                .GET()
-                .build();
-
+        HttpRequest request = auth(HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/orders/book")).GET());
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> getViewOrders(int port) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost:" + port + "/view/orders"))
-                .GET()
-                .build();
-
+        HttpRequest request = auth(HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/view/orders")).GET());
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> getViewDashboard(int port) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost:" + port + "/view/dashboard"))
-                .GET()
-                .build();
-
+        HttpRequest request = auth(HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/view/dashboard")).GET());
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> getViewUi(int port) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost:" + port + "/view/ui"))
-                .GET()
-                .build();
-
+        HttpRequest request = auth(HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/view/ui")).GET());
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> getViewBulkOrders(int port) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost:" + port + "/view/bulk-orders"))
-                .GET()
-                .build();
-
+        HttpRequest request = auth(HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/view/bulk-orders")).GET());
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> getAccountAggregates(int port) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost:" + port + "/view/aggregates/accounts"))
-                .GET()
-                .build();
-
+        HttpRequest request = auth(HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/view/aggregates/accounts")).GET());
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> getFundAggregates(int port) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("http://localhost:" + port + "/view/aggregates/funds"))
-                .GET()
-                .build();
-
+        HttpRequest request = auth(HttpRequest.newBuilder()
+                .uri(new URI("http://localhost:" + port + "/view/aggregates/funds")).GET());
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> postReplay(int port) throws Exception {
         HttpClient client = HttpClient.newHttpClient();
-        HttpRequest request = HttpRequest.newBuilder()
+        HttpRequest request = auth(HttpRequest.newBuilder()
                 .uri(new URI("http://localhost:" + port + "/view/replay"))
                 .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString("{}"))
-                .build();
-
+                .POST(HttpRequest.BodyPublishers.ofString("{}")));
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

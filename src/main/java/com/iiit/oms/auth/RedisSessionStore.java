@@ -6,7 +6,6 @@ import com.iiit.oms.model.UserSession;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
 import redis.clients.jedis.JedisPoolConfig;
-import redis.clients.jedis.params.SetParams;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
@@ -16,7 +15,7 @@ import java.util.logging.Logger;
  * Keys: oms:session:{token} → JSON user payload, TTL 86400s (24h).
  * Falls back to an in-memory ConcurrentHashMap if Redis is unavailable.
  */
-public class RedisSessionStore implements SessionStore {
+public class RedisSessionStore implements SessionStore, RevocationStore {
     private static final Logger LOGGER = Logger.getLogger(RedisSessionStore.class.getName());
     private static final String KEY_PREFIX = "oms:session:";
     private static final int TTL_SECONDS = 86400; // 24h
@@ -97,6 +96,36 @@ public class RedisSessionStore implements SessionStore {
             }
         }
         fallback.remove(token);
+    }
+
+    private static final String REVOKED_PREFIX = "oms:revoked:";
+    private final InMemoryRevocationStore fallbackRevocation = new InMemoryRevocationStore();
+
+    @Override
+    public void revoke(String jti, long ttlSeconds) {
+        if (jti == null || ttlSeconds <= 0) return;
+        if (redisAvailable && jedisPool != null) {
+            try (Jedis j = jedisPool.getResource()) {
+                j.setex(REVOKED_PREFIX + jti, ttlSeconds, "1");
+                return;
+            } catch (Exception ex) {
+                LOGGER.warning("Redis revoke failed, using in-memory fallback: " + ex.getMessage());
+            }
+        }
+        fallbackRevocation.revoke(jti, ttlSeconds);
+    }
+
+    @Override
+    public boolean isRevoked(String jti) {
+        if (jti == null) return false;
+        if (redisAvailable && jedisPool != null) {
+            try (Jedis j = jedisPool.getResource()) {
+                return j.exists(REVOKED_PREFIX + jti);
+            } catch (Exception ex) {
+                LOGGER.warning("Redis isRevoked check failed, using in-memory fallback: " + ex.getMessage());
+            }
+        }
+        return fallbackRevocation.isRevoked(jti);
     }
 
     private String toJson(User user) {

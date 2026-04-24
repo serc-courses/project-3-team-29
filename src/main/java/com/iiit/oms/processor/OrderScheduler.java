@@ -9,9 +9,12 @@ import com.iiit.oms.readmodel.OrderProjectionListener;
 import com.iiit.oms.repository.FundRepository;
 import com.iiit.oms.repository.OrderRepository;
 
+import redis.clients.jedis.JedisPool;
+
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -23,11 +26,16 @@ import java.util.stream.Collectors;
 public class OrderScheduler {
     private static final Logger LOGGER = Logger.getLogger(OrderScheduler.class.getName());
     private static final long POLL_INTERVAL_SECONDS = 30;
+    // Lock TTL is shorter than the interval so the lock naturally expires before the next tick
+    private static final long LOCK_TTL_SECONDS = 25;
+    private static final String LOCK_KEY = "oms:scheduler:order-lock";
+    private static final String INSTANCE_ID = UUID.randomUUID().toString();
 
     private final OrderRepository orderRepository;
     private final OrderStateMachine orderStateMachine;
     private final ScheduledExecutorService scheduler;
     private ScheduledFuture<?> pollingTask;
+    private JedisPool jedisPool;
 
     // Optional dependencies for real-time SSE broadcasting
     private OrderProjectionListener projectionListener;
@@ -57,7 +65,16 @@ public class OrderScheduler {
         this.kafkaPublisher = kafkaPublisher;
     }
 
+    public void setJedisPool(JedisPool jedisPool) {
+        this.jedisPool = jedisPool;
+    }
+
     public int pollAndProcessPendingOrders() {
+        DistributedLock lock = new DistributedLock(jedisPool, LOCK_KEY, INSTANCE_ID, LOCK_TTL_SECONDS);
+        if (!lock.tryAcquire()) {
+            LOGGER.fine("OrderScheduler: lock held by another replica — skipping this tick.");
+            return 0;
+        }
         LOGGER.info("OrderScheduler wake-up triggered. Scanning for pending orders.");
 
         List<Order> pendingOrders = orderRepository.findAll()

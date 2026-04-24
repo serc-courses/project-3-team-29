@@ -145,6 +145,18 @@ public final class PostgresSchemaInitializer {
                 + "escalated BOOLEAN DEFAULT FALSE"
                 + ")");
 
+        // WORM archival schema
+        statements.add("ALTER TABLE order_audit_log "
+                + "ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ");
+
+        statements.add("CREATE TABLE IF NOT EXISTS audit_archive_runs ("
+                + "run_id BIGSERIAL PRIMARY KEY,"
+                + "archived_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),"
+                + "records_count INT NOT NULL,"
+                + "file_path TEXT NOT NULL,"
+                + "checksum_sha256 TEXT NOT NULL"
+                + ")");
+
         return statements;
     }
 

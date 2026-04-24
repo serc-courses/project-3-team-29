@@ -18,36 +18,36 @@ export default defineConfig({
     port: 5174,
     proxy: {
       '/orders': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost',
         changeOrigin: true,
         bypass(req) {
           if (isSpaNavigation(req)) return '/index.html'
         },
       },
       '/funds': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost',
         changeOrigin: true,
         bypass(req) {
           if (isSpaNavigation(req)) return '/index.html'
         },
       },
       '/view': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost',
         changeOrigin: true,
       },
       '/auth': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost',
         changeOrigin: true,
       },
       '/accounts': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost',
         changeOrigin: true,
         bypass(req) {
           if (isSpaNavigation(req)) return '/index.html'
         },
       },
       '/advisor': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost',
         changeOrigin: true,
         bypass(req) {
           if (isSpaNavigation(req)) return '/index.html'

@@ -1,0 +1,70 @@
+.sla-widget {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #F8FAFC;
+  border: 1px solid #E2E8F0;
+  border-radius: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.sla-widget-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #64748B;
+  white-space: nowrap;
+}
+
+.sla-widget-cards {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sla-card {
+  position: relative;
+  padding: 8px 14px 8px 10px;
+  background: #ffffff;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  min-width: 160px;
+  overflow: hidden;
+}
+
+.sla-card-status {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 3px;
+  height: 100%;
+  border-radius: 8px 0 0 8px;
+}
+
+.sla-card-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: #94A3B8;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.sla-card-countdown {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.sla-card-subtitle {
+  font-size: 10px;
+  color: #94A3B8;
+  margin-top: 2px;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+}

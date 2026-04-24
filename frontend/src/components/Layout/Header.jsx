@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 const ReplayIcon = () => (
   <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
@@ -11,6 +11,7 @@ const ReplayIcon = () => (
 )
 import { replayProjections } from '../../api/operationsApi'
 import { ROUTES } from '../../constants/routes'
+import { useAuth } from '../../context/AuthContext'
 
 const PAGE_TITLES = {
   [ROUTES.DASHBOARD]: 'Dashboard',
@@ -23,6 +24,8 @@ const PAGE_TITLES = {
 
 export default function Header({ sseConnected }) {
   const location = useLocation()
+  const navigate = useNavigate()
+  const { logout } = useAuth()
   const [replaying, setReplaying] = useState(false)
   const [toast, setToast] = useState(null)
 
@@ -45,6 +48,11 @@ export default function Header({ sseConnected }) {
     }
   }
 
+  const handleLogout = async () => {
+    await logout()
+    navigate('/login', { replace: true })
+  }
+
   return (
     <>
       <header className="header">
@@ -64,6 +72,13 @@ export default function Header({ sseConnected }) {
               ? <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
               : <ReplayIcon />}
             Replay
+          </button>
+          <button
+            className="btn btn-outline"
+            onClick={handleLogout}
+            style={{ fontSize: 'var(--text-xs)', padding: '4px 10px' }}
+          >
+            Logout
           </button>
         </div>
       </header>

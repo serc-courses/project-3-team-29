@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout/Layout'
+import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute'
+import { AuthProvider } from './context/AuthContext'
 import Dashboard from './pages/Dashboard'
 import Orders from './pages/Orders'
 import BulkOrders from './pages/BulkOrders'
@@ -12,6 +14,7 @@ import { useSse } from './hooks/useSse'
 import AggregateFund from './pages/AggregateFund'
 import Reconciliation from './pages/Reconciliation'
 import Portfolio from './pages/Portfolio'
+import Login from './pages/Login'
 
 function App() {
   const [sseConnected, setSseConnected] = useState(false)
@@ -31,20 +34,24 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Layout sseConnected={sseConnected}>
-        <Routes>
-          <Route path="/" element={<Dashboard sseEventCount={sseEventCount} />} />
-          <Route path="/orders" element={<Orders sseEventCount={sseEventCount} />} />
-          <Route path="/bulk-orders" element={<BulkOrders sseEventCount={sseEventCount} />} />
-          <Route path="/funds" element={<Funds />} />
-          <Route path="/accounts" element={<Accounts />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="/orders/new" element={<NewOrder />} />
-          <Route path="/aggregate-funds" element={<AggregateFund />} />
-          <Route path="/reconciliation" element={<Reconciliation />} />
-          <Route path="/portfolio" element={<Portfolio />} />
-        </Routes>
-      </Layout>
+      <AuthProvider>
+        <Layout sseConnected={sseConnected}>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/" element={<ProtectedRoute><Dashboard sseEventCount={sseEventCount} /></ProtectedRoute>} />
+            <Route path="/orders" element={<ProtectedRoute><Orders sseEventCount={sseEventCount} /></ProtectedRoute>} />
+            <Route path="/bulk-orders" element={<ProtectedRoute><BulkOrders sseEventCount={sseEventCount} /></ProtectedRoute>} />
+            <Route path="/funds" element={<ProtectedRoute><Funds /></ProtectedRoute>} />
+            <Route path="/accounts" element={<ProtectedRoute><Accounts /></ProtectedRoute>} />
+            <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
+            <Route path="/orders/new" element={<ProtectedRoute><NewOrder /></ProtectedRoute>} />
+            <Route path="/aggregate-funds" element={<ProtectedRoute><AggregateFund /></ProtectedRoute>} />
+            <Route path="/reconciliation" element={<ProtectedRoute><Reconciliation /></ProtectedRoute>} />
+            <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Layout>
+      </AuthProvider>
     </BrowserRouter>
   )
 }

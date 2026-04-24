@@ -1,5 +1,6 @@
 import './Dashboard.css'
 import { useMemo } from 'react'
+import SLAWidget from '../components/SLAWidget/SLAWidget'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, AreaChart, Area,
@@ -199,6 +200,7 @@ export default function Dashboard({ sseEventCount }) {
 
   return (
     <div className="dashboard-page">
+      <SLAWidget />
       <div className="dashboard-cards">
         <SummaryCard title="Total Orders"      value={data?.totalOrders ?? 0}       icon={<IconTotalOrders color="var(--color-primary-600)" />} accentColor="var(--color-primary-500)" />
         <SummaryCard title="Total Bulk Orders" value={data?.totalBulkOrders ?? 0}   icon={<IconBulkOrders  color="#6366F1" />}                 accentColor="#6366F1" />

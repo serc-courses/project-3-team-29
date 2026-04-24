@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import './Portfolio.css'
-import { CONFIG } from '../constants/config'
+import { api } from '../api/client'
 
 const fmt = (v) => parseFloat(v || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmtPct = (v) => parseFloat(v || 0).toFixed(2)
@@ -15,9 +15,7 @@ export default function Portfolio() {
         setError(null)
         try {
             const params = accountFilter ? `?accountID=${accountFilter}` : ''
-            const res = await fetch(`${CONFIG.API_BASE_URL}/view/portfolio${params}`)
-            if (!res.ok) throw new Error('Failed to load portfolio')
-            const json = await res.json()
+            const json = await api.get(`/view/portfolio${params}`)
             setData(json)
         } catch (err) {
             setError(err.message)

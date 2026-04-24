@@ -21,6 +21,9 @@ import com.iiit.oms.model.User;
 import com.iiit.oms.model.UserSession;
 import com.iiit.oms.auth.SessionStore;
 import com.iiit.oms.auth.InMemorySessionStore;
+import com.iiit.oms.auth.JwtService;
+import com.iiit.oms.auth.InMemoryRevocationStore;
+import com.iiit.oms.filter.RbacFilter;
 import com.iiit.oms.repository.AuditLogRepository;
 import com.iiit.oms.repository.ReconciliationBreakRepository;
 import com.iiit.oms.model.ReconciliationBreak;
@@ -37,11 +40,18 @@ import com.iiit.oms.util.UniqueIdGenerator;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import com.sun.net.httpserver.HttpsServer;
+import com.sun.net.httpserver.HttpsConfigurator;
+import com.sun.net.httpserver.HttpsParameters;
 
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLParameters;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.security.KeyStore;
 import java.nio.charset.StandardCharsets;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -96,6 +106,8 @@ public class OrderRestServer implements SseBroadcaster {
     private static final String RECONCILIATION_RESOLVE_PATH = "/view/reconciliation/resolve";
     private static final String PORTFOLIO_PATH = "/view/portfolio";
     private static final String FUNDS_NAV_PATH = "/funds/nav";
+    private static final String VIEW_SLA_PATH = "/view/sla";
+    private static final String VIEW_AUDIT_ARCHIVE_PATH = "/view/audit-archive";
 
     private final HttpServer httpServer;
     private final OrderRepository orderRepository;
@@ -107,6 +119,9 @@ public class OrderRestServer implements SseBroadcaster {
     private final AdvisorClientRelationshipRepository advisorClientRelationshipRepository;
     private final UserRepository userRepository;
     private volatile SessionStore tokenStore;
+    private volatile JwtService jwtService;
+    private final RbacFilter rbacFilter;
+    private volatile com.iiit.oms.db.util.PostgresConnectionFactory pgConnectionFactory;
     private final OrderStateMachine orderStateMachine;
     private final ProjectionStore projectionStore;
     private final OrderProjectionListener projectionListener;
@@ -178,7 +193,9 @@ public class OrderRestServer implements SseBroadcaster {
         this.objectMapper = new ObjectMapper();
         this.sseClients = new CopyOnWriteArrayList<>();
         this.tokenStore = new InMemorySessionStore();
-        this.httpServer = HttpServer.create(new InetSocketAddress(port), 0);
+        this.jwtService = new JwtService(new InMemoryRevocationStore());
+        this.rbacFilter = new RbacFilter(this.jwtService);
+        this.httpServer = createServer(port);
         com.iiit.oms.filter.LatencyFilter latencyFilter = new com.iiit.oms.filter.LatencyFilter();
         this.httpServer.createContext(ADVISOR_ORDERS_PLAN_PATH, withCors(new AdvisorPlanOrdersHandler())).getFilters()
                 .add(latencyFilter);
@@ -241,6 +258,8 @@ public class OrderRestServer implements SseBroadcaster {
                 .add(latencyFilter);
         this.httpServer.createContext(PORTFOLIO_PATH, withCors(new PortfolioHandler())).getFilters().add(latencyFilter);
         this.httpServer.createContext(FUNDS_NAV_PATH, withCors(new UpdateNavHandler())).getFilters().add(latencyFilter);
+        this.httpServer.createContext(VIEW_SLA_PATH, withCors(new SlaHandler())).getFilters().add(latencyFilter);
+        this.httpServer.createContext(VIEW_AUDIT_ARCHIVE_PATH, withCors(new AuditArchiveHandler())).getFilters().add(latencyFilter);
         this.httpServer.setExecutor(Executors.newFixedThreadPool(16));
     }
 
@@ -255,7 +274,7 @@ public class OrderRestServer implements SseBroadcaster {
         return exchange -> {
             exchange.getResponseHeaders().add("Access-Control-Allow-Origin", getAllowedOrigin());
             exchange.getResponseHeaders().add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-            exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type");
+            exchange.getResponseHeaders().add("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(204, -1);
@@ -263,8 +282,63 @@ public class OrderRestServer implements SseBroadcaster {
                 return;
             }
 
+            if (!rbacFilter.checkAccess(exchange)) return;
+
             handler.handle(exchange);
         };
+    }
+
+    /**
+     * Creates an HttpsServer if a keystore is available, otherwise falls back to plain HttpServer.
+     * Keystore path: OMS_KEYSTORE_PATH env var (default: src/main/resources/keystore.jks).
+     * Keystore pass: OMS_KEYSTORE_PASS env var (default: changeit).
+     * TLS protocols restricted to TLSv1.2 and TLSv1.3.
+     */
+    private static HttpServer createServer(int port) throws IOException {
+        // Check system property first (allows test override), then env var, then default
+        String keystorePath = System.getProperty("OMS_KEYSTORE_PATH");
+        if (keystorePath == null || keystorePath.isBlank()) keystorePath = System.getenv("OMS_KEYSTORE_PATH");
+        if (keystorePath == null || keystorePath.isBlank()) keystorePath = "src/main/resources/keystore.jks";
+
+        String keystorePass = System.getProperty("OMS_KEYSTORE_PASS");
+        if (keystorePass == null || keystorePass.isBlank()) keystorePass = System.getenv("OMS_KEYSTORE_PASS");
+        if (keystorePass == null || keystorePass.isBlank()) keystorePass = "changeit";
+
+        java.io.File ksFile = new java.io.File(keystorePath);
+        if (!ksFile.exists()) {
+            LOGGER.warning("TLS keystore not found at " + keystorePath + " — falling back to plain HTTP on port " + port
+                    + ". Run scripts/gen-keystore.sh to enable HTTPS.");
+            return HttpServer.create(new InetSocketAddress(port), 0);
+        }
+
+        try {
+            KeyStore ks = KeyStore.getInstance("JKS");
+            char[] pass = keystorePass.toCharArray();
+            try (java.io.FileInputStream fis = new java.io.FileInputStream(ksFile)) {
+                ks.load(fis, pass);
+            }
+
+            KeyManagerFactory kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+            kmf.init(ks, pass);
+
+            SSLContext sslCtx = SSLContext.getInstance("TLS");
+            sslCtx.init(kmf.getKeyManagers(), null, null);
+
+            HttpsServer httpsServer = HttpsServer.create(new InetSocketAddress(port), 0);
+            httpsServer.setHttpsConfigurator(new HttpsConfigurator(sslCtx) {
+                @Override
+                public void configure(HttpsParameters params) {
+                    SSLParameters sslParams = sslCtx.getDefaultSSLParameters();
+                    sslParams.setProtocols(new String[]{"TLSv1.2", "TLSv1.3"});
+                    params.setSSLParameters(sslParams);
+                }
+            });
+            LOGGER.info("TLS enabled on port " + port + " using keystore: " + keystorePath);
+            return httpsServer;
+        } catch (Exception ex) {
+            LOGGER.warning("Failed to initialise TLS (" + ex.getMessage() + ") — falling back to plain HTTP on port " + port);
+            return HttpServer.create(new InetSocketAddress(port), 0);
+        }
     }
 
     public void start() {
@@ -293,12 +367,23 @@ public class OrderRestServer implements SseBroadcaster {
         }
     }
 
+    public void setJwtService(JwtService jwtService) {
+        if (jwtService != null) {
+            this.jwtService = jwtService;
+            this.rbacFilter.setJwtService(jwtService);
+        }
+    }
+
     public void setAuditLogRepository(AuditLogRepository auditLogRepository) {
         this.auditLogRepository = auditLogRepository;
     }
 
     public void setReconciliationBreakRepository(ReconciliationBreakRepository reconciliationBreakRepository) {
         this.reconciliationBreakRepository = reconciliationBreakRepository;
+    }
+
+    public void setConnectionFactory(com.iiit.oms.db.util.PostgresConnectionFactory factory) {
+        this.pgConnectionFactory = factory;
     }
 
     private final class CancelOrderHandler implements HttpHandler {
@@ -1170,6 +1255,10 @@ public class OrderRestServer implements SseBroadcaster {
         if (authHeader == null || !authHeader.startsWith("Bearer "))
             return null;
         String token = authHeader.substring(7).trim();
+        if (jwtService != null) {
+            return jwtService.validateAndExtract(token);
+        }
+        // Legacy UUID-token fallback
         UserSession session = tokenStore.get(token);
         if (session == null)
             return null;
@@ -1479,14 +1568,24 @@ public class OrderRestServer implements SseBroadcaster {
                     return;
                 }
                 Optional<User> maybeUser = userRepository.findByUsername(username.trim());
-                if (maybeUser.isEmpty() || !password.equals(maybeUser.get().getPassword())) {
+                if (maybeUser.isEmpty()) {
                     sendJsonResponse(exchange, 401, Map.of("message", "Invalid username or password"));
                     return;
                 }
-                String token = java.util.UUID.randomUUID().toString();
-                UserSession session = new UserSession(token, maybeUser.get());
-                tokenStore.put(token, session);
-                Map<String, Object> response = userToResponse(maybeUser.get());
+                User user = maybeUser.get();
+                boolean passwordOk = org.mindrot.jbcrypt.BCrypt.checkpw(password, user.getPassword());
+                if (!passwordOk) {
+                    sendJsonResponse(exchange, 401, Map.of("message", "Invalid username or password"));
+                    return;
+                }
+                String token;
+                if (jwtService != null) {
+                    token = jwtService.generateToken(user);
+                } else {
+                    token = java.util.UUID.randomUUID().toString();
+                    tokenStore.put(token, new UserSession(token, user));
+                }
+                Map<String, Object> response = userToResponse(user);
                 response.put("token", token);
                 sendJsonResponse(exchange, 200, response);
             } catch (Exception ex) {
@@ -1567,9 +1666,91 @@ public class OrderRestServer implements SseBroadcaster {
             }
             String authHeader = exchange.getRequestHeaders().getFirst("Authorization");
             if (authHeader != null && authHeader.startsWith("Bearer ")) {
-                tokenStore.remove(authHeader.substring(7).trim());
+                String token = authHeader.substring(7).trim();
+                if (jwtService != null) {
+                    jwtService.revokeToken(token);
+                } else {
+                    tokenStore.remove(token);
+                }
             }
             sendJsonResponse(exchange, 200, Map.of("message", "Logged out"));
+        }
+    }
+
+    private final class AuditArchiveHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only GET is supported"));
+                return;
+            }
+            if (pgConnectionFactory == null) {
+                sendJsonResponse(exchange, 503, Map.of("message", "Database not configured"));
+                return;
+            }
+            try (java.sql.Connection conn = pgConnectionFactory.getConnection();
+                 java.sql.PreparedStatement stmt = conn.prepareStatement(
+                         "SELECT run_id, archived_at, records_count, file_path, checksum_sha256 " +
+                         "FROM audit_archive_runs ORDER BY archived_at DESC")) {
+                java.sql.ResultSet rs = stmt.executeQuery();
+                List<Map<String, Object>> rows = new ArrayList<>();
+                while (rs.next()) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("runId",          rs.getLong("run_id"));
+                    row.put("archivedAt",     rs.getTimestamp("archived_at").toInstant().toString());
+                    row.put("recordsCount",   rs.getInt("records_count"));
+                    row.put("filePath",       rs.getString("file_path"));
+                    row.put("checksumSha256", rs.getString("checksum_sha256"));
+                    rows.add(row);
+                }
+                sendJsonResponse(exchange, 200, rows);
+            } catch (java.sql.SQLException ex) {
+                sendJsonResponse(exchange, 500, Map.of("message", "DB error: " + ex.getMessage()));
+            }
+        }
+    }
+
+    private final class SlaHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only GET is supported"));
+                return;
+            }
+            UserSession session = resolveAuthenticatedUser(exchange);
+            if (session == null) {
+                sendJsonResponse(exchange, 401, Map.of("message", "Authentication required"));
+                return;
+            }
+
+            java.time.ZonedDateTime now = java.time.ZonedDateTime.now(java.time.ZoneOffset.UTC);
+
+            // Onshore cutoff: 16:00 UTC today (or tomorrow if already past)
+            java.time.ZonedDateTime onshore = now.toLocalDate()
+                    .atTime(16, 0).atZone(java.time.ZoneOffset.UTC);
+            if (!now.isBefore(onshore)) onshore = onshore.plusDays(1);
+
+            // Offshore cutoff: 01:00 UTC today (or tomorrow if already past)
+            java.time.ZonedDateTime offshore = now.toLocalDate()
+                    .atTime(1, 0).atZone(java.time.ZoneOffset.UTC);
+            if (!now.isBefore(offshore)) offshore = offshore.plusDays(1);
+
+            long secToOnshore  = java.time.Duration.between(now, onshore).getSeconds();
+            long secToOffshore = java.time.Duration.between(now, offshore).getSeconds();
+
+            Map<String, Object> latency = new LinkedHashMap<>();
+            latency.put("p99Ms",          com.iiit.oms.filter.LatencyFilter.getP99Ms());
+            latency.put("avgMs",           com.iiit.oms.filter.LatencyFilter.getAvgMs());
+            latency.put("totalRequests",   com.iiit.oms.filter.LatencyFilter.getTotalRequests());
+
+            Map<String, Object> resp = new LinkedHashMap<>();
+            resp.put("serverTimeMs",       now.toInstant().toEpochMilli());
+            resp.put("onshoreDeadline",    onshore.toString());
+            resp.put("offshoreDeadline",   offshore.toString());
+            resp.put("secondsToOnshore",   secToOnshore);
+            resp.put("secondsToOffshore",  secToOffshore);
+            resp.put("latency",            latency);
+            sendJsonResponse(exchange, 200, resp);
         }
     }
 

@@ -20,6 +20,7 @@ import com.iiit.oms.transfer.TransmissionAck;
 import com.iiit.oms.util.UniqueIdGenerator;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
+import java.util.UUID;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -38,6 +39,9 @@ import java.util.stream.Collectors;
 public class BatchoutScheduler {
     private static final Logger LOGGER = Logger.getLogger(BatchoutScheduler.class.getName());
     private static final long BATCHOUT_INTERVAL_SECONDS = 120;
+    private static final long BATCHOUT_LOCK_TTL_SECONDS = 110;
+    private static final String BATCHOUT_LOCK_KEY = "oms:scheduler:batchout-lock";
+    private static final String INSTANCE_ID = UUID.randomUUID().toString();
     private static final String FIRM_ACCOUNT_ID = "FIRMACCT";
 
     private final OrderRepository orderRepository;
@@ -298,6 +302,11 @@ public class BatchoutScheduler {
     }
 
     private void runBatchoutCycle() {
+        DistributedLock lock = new DistributedLock(jedisPool, BATCHOUT_LOCK_KEY, INSTANCE_ID, BATCHOUT_LOCK_TTL_SECONDS);
+        if (!lock.tryAcquire()) {
+            LOGGER.fine("BatchoutScheduler: lock held by another replica — skipping this tick.");
+            return;
+        }
         try {
             LOGGER.info("BatchoutScheduler wake-up triggered");
             List<BulkOrder> created = batchoutPlacedOrders();

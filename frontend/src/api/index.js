@@ -5,3 +5,4 @@ export * from './aggregatesApi';
 export * from './operationsApi';
 export * from './usersApi';
 export * from './fundApi';
+export * from './authApi';

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import './Reconciliation.css'
-import { CONFIG } from '../constants/config'
+import { api } from '../api/client'
 import { exportToCsv } from '../utils/exportCsv'
 
 export default function Reconciliation() {
@@ -16,11 +16,9 @@ export default function Reconciliation() {
         setError(null)
         try {
             const url = showAll
-                ? `${CONFIG.API_BASE_URL}/view/reconciliation?all=true`
-                : `${CONFIG.API_BASE_URL}/view/reconciliation`
-            const res = await fetch(url)
-            if (!res.ok) throw new Error('Failed to load reconciliation breaks')
-            const data = await res.json()
+                ? '/view/reconciliation?all=true'
+                : '/view/reconciliation'
+            const data = await api.get(url)
             setBreaks(data)
         } catch (err) {
             setError(err.message)
@@ -37,15 +35,7 @@ export default function Reconciliation() {
         setResolving(breakId)
         setConfirmModal(null)
         try {
-            const res = await fetch(`${CONFIG.API_BASE_URL}/view/reconciliation/resolve`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ breakId, action }),
-            })
-            if (!res.ok) {
-                const data = await res.json()
-                throw new Error(data.message || 'Failed to resolve break')
-            }
+            await api.post('/view/reconciliation/resolve', { breakId, action })
             await fetchBreaks()
         } catch (err) {
             alert('Error: ' + err.message)

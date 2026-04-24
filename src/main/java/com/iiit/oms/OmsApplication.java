@@ -152,7 +152,9 @@ public class OmsApplication {
                 j.ping();
             }
             batchoutScheduler.setJedisPool(sharedPool);
+            orderScheduler.setJedisPool(sharedPool);
             System.out.println("BatchoutScheduler: Redis dedup pool connected");
+            System.out.println("Schedulers: Redis distributed lock enabled");
         } catch (Exception e) {
             System.out.println("BatchoutScheduler: Redis dedup disabled (unavailable)");
         }
@@ -175,6 +177,7 @@ public class OmsApplication {
         orderRestServer.setIdempotencyStore(idempotencyStore);
         orderRestServer.setAuditLogRepository(auditLogRepository);
         orderRestServer.setKafkaPublisher(kafkaPublisher);
+        orderRestServer.setConnectionFactory(connectionFactory);
 
         // ---- Reconciliation Engine ----
         PostgresReconciliationBreakDatabase reconBreakDb = new PostgresReconciliationBreakDatabase(connectionFactory);
@@ -202,12 +205,17 @@ public class OmsApplication {
             }
         }, 60, 60, TimeUnit.SECONDS);
 
-        // Wire Redis session store so sessions survive restarts
+        // Wire Redis session store and JWT service
         try {
-            orderRestServer.setSessionStore(new com.iiit.oms.auth.RedisSessionStore(redisHost, redisPort));
+            com.iiit.oms.auth.RedisSessionStore redisSessionStore =
+                    new com.iiit.oms.auth.RedisSessionStore(redisHost, redisPort);
+            orderRestServer.setSessionStore(redisSessionStore);
+            orderRestServer.setJwtService(new com.iiit.oms.auth.JwtService(redisSessionStore));
             System.out.println("Session store: Redis at " + redisHost + ":" + redisPort);
+            System.out.println("JWT auth: enabled (Redis-backed revocation)");
         } catch (Exception e) {
             System.out.println("Session store: InMemory (Redis unavailable)");
+            System.out.println("JWT auth: enabled (in-memory revocation fallback)");
         }
 
         // Wire SSE broadcaster, projection, and Kafka into OrderScheduler
@@ -221,6 +229,11 @@ public class OmsApplication {
         batchoutScheduler.setSseBroadcaster(orderRestServer);
         batchoutScheduler.setKafkaPublisher(kafkaPublisher);
         batchoutScheduler.startBatchout();
+
+        // WORM Audit Log Archiver
+        com.iiit.oms.kafka.AuditLogArchiver auditLogArchiver =
+                new com.iiit.oms.kafka.AuditLogArchiver(connectionFactory);
+        auditLogArchiver.start();
 
         // Kafka consumers (silently disabled if Kafka is unavailable)
         KafkaNotificationConsumer notificationConsumer = new KafkaNotificationConsumer(kafkaBootstrap, orderRestServer);
@@ -237,6 +250,7 @@ public class OmsApplication {
             orderScheduler.shutdown();
             batchoutScheduler.shutdown();
             reconEscalationScheduler.shutdownNow();
+            auditLogArchiver.shutdown();
             orderRestServer.stop(0);
             if (projectionStore instanceof MongoDbProjectionStore) {
                 ((MongoDbProjectionStore) projectionStore).close();

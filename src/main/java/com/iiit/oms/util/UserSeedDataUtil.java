@@ -2,20 +2,24 @@ package com.iiit.oms.util;
 
 import com.iiit.oms.model.User;
 import com.iiit.oms.repository.UserRepository;
+import org.mindrot.jbcrypt.BCrypt;
 
 /**
  * Seeds demo users into an in-memory repository.
  *
  * Investor password: invest123
  * Advisor  password: advise123
+ * Admin    password: admin123
  *
  * Each investor maps 1:1 to the account seeded by AccountMockDataUtil.
  * Each advisor maps to an existing ADV00x ID seeded by AdvisorMockDataUtil.
+ *
+ * Passwords are BCrypt-hashed before being stored.
  */
 public final class UserSeedDataUtil {
 
     private static final String[][] INVESTORS = {
-        // userID,     username,          password,    displayName,         accountID
+        // userID,     username,          plainPassword,  displayName,         accountID
         {"USR001", "john.miller",      "invest123", "John Miller",       "ACCT00001"},
         {"USR002", "emma.johnson",     "invest123", "Emma Johnson",      "ACCT00002"},
         {"USR003", "liam.davis",       "invest123", "Liam Davis",        "ACCT00003"},
@@ -29,20 +33,38 @@ public final class UserSeedDataUtil {
     };
 
     private static final String[][] ADVISORS = {
-        // userID,     username,    password,    displayName,    advisorID
+        // userID,     username,    plainPassword,  displayName,    advisorID
         {"USR011", "advisor1", "advise123", "Advisor One", "ADV001"},
         {"USR012", "advisor2", "advise123", "Advisor Two", "ADV002"},
+    };
+
+    private static final String[][] ADMINS = {
+        // userID,     username,  plainPassword, displayName
+        {"USR013", "admin", "admin123", "OMS Admin"},
     };
 
     private UserSeedDataUtil() {}
 
     public static void seedIfMissing(UserRepository repo) {
-        if (!repo.findAll().isEmpty()) return;
         for (String[] r : INVESTORS) {
-            repo.save(new User(r[0], r[1], r[2], "INVESTOR", r[3], r[4], null));
+            ensureUser(repo, r[1], new User(
+                    r[0], r[1], BCrypt.hashpw(r[2], BCrypt.gensalt()), "INVESTOR", r[3], r[4], null
+            ));
         }
         for (String[] r : ADVISORS) {
-            repo.save(new User(r[0], r[1], r[2], "ADVISOR", r[3], null, r[4]));
+            ensureUser(repo, r[1], new User(
+                    r[0], r[1], BCrypt.hashpw(r[2], BCrypt.gensalt()), "ADVISOR", r[3], null, r[4]
+            ));
         }
+        for (String[] r : ADMINS) {
+            ensureUser(repo, r[1], new User(
+                    r[0], r[1], BCrypt.hashpw(r[2], BCrypt.gensalt()), "ADMIN", r[3], null, null
+            ));
+        }
+    }
+
+    private static void ensureUser(UserRepository repo, String username, User candidate) {
+        if (repo.findByUsername(username).isPresent()) return;
+        repo.save(candidate);
     }
 }

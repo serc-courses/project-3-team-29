@@ -136,6 +136,52 @@ Open your browser and go to http://localhost:5174 to use the app.
 
 ---
 
+## Quick Start — One Command (After Prerequisites)
+
+If you have already done Step 0 (installed Docker, Java, Maven, Node) and your dependencies are installed, run everything with a single command:
+
+### On Linux / macOS / WSL:
+
+```bash
+# Start Docker infrastructure in background
+docker compose up -d
+
+# Run all services (backend + 2 frontends in one terminal with color-coded logs)
+make run
+```
+
+Or manually:
+```bash
+bash scripts/run.sh
+```
+
+This starts all services with prefixed logs so you can see what's happening. Press `Ctrl+C` to stop everything.
+
+### On Windows (PowerShell):
+
+If you don't have `make` or bash, use this alternative:
+
+```powershell
+# 1. Start Docker infrastructure
+docker compose up -d
+
+# 2. Install frontend deps (if not already done)
+cd frontend; npm install; cd ..
+cd user-frontend; npm install; cd ..
+
+# 3. Start all three services in separate windows or tabs:
+#    Window 1 — Backend:
+mvn exec:java -Dexec.mainClass=com.iiit.oms.OmsApplication
+
+#    Window 2 — Admin UI:
+cd frontend; npm run dev
+
+#    Window 3 — User/Advisor UI:
+cd user-frontend; npm run dev
+```
+
+---
+
 ## Option B — Manual Setup (Step by Step)
 
 Use this if the automated script fails or you want to understand each step.
@@ -263,7 +309,26 @@ The login page shows test credentials. These are the main ones:
 
 ### Admin Frontend (http://localhost:5173)
 
-No login required — directly shows the dashboard.
+Admin login is required.
+
+| Role | Username | Password |
+|------|----------|----------|
+| Admin | `admin` | `admin123` |
+
+Important: pages like Reconciliation and Portfolio P/L are admin-focused; if you log in with advisor/investor credentials, those pages can show "Failed to load ..." due to role restrictions.
+
+Quick API check for admin login:
+```powershell
+curl -s -o NUL -w "%{http_code}" -X POST http://localhost/auth/login -H "Content-Type: application/json" -d '{"username":"admin","password":"admin123"}'
+```
+Expected status: `200`
+
+Quick role check for admin-only pages (PowerShell):
+```powershell
+$token = (Invoke-RestMethod -Method POST -Uri http://localhost/auth/login -ContentType "application/json" -Body '{"username":"admin","password":"admin123"}').token
+Invoke-RestMethod -Method GET -Uri http://localhost/view/reconciliation -Headers @{ Authorization = "Bearer $token" }
+Invoke-RestMethod -Method GET -Uri http://localhost/view/portfolio -Headers @{ Authorization = "Bearer $token" }
+```
 
 ---
 
@@ -346,7 +411,12 @@ docker logs project3-postgres-1
 Look for errors. Usually it resolves in 15–30 seconds.
 
 ### Frontend shows blank page or 404
-Make sure the backend is running. The frontend proxies all API calls to `localhost:8080`. If the backend is down, all API calls fail.
+Make sure the backend stack is running. The frontend proxies API calls to `http://localhost` (nginx on port 80). If backend/nginx is down, all API calls fail.
+
+### Admin login works but Reconciliation/Portfolio shows "Failed to load ..."
+This usually means you are not logged in as admin. Sign out from `http://localhost:5173`, then log in with:
+- Username: `admin`
+- Password: `admin123`
 
 ### npm install fails
 Make sure you are in the right folder (`frontend` for admin, `user-frontend` for user). Delete the `node_modules` folder and try again:
