@@ -90,6 +90,7 @@ public class OrderRestServer implements SseBroadcaster {
     private static final String ADVISOR_ORDERS_PLAN_PATH = "/advisor/orders/plan";
     private static final String ADVISOR_DASHBOARD_PATH = "/advisor/dashboard";
     private static final String TRANSFER_AGENT_CONTRACT_PATH = "/transfer-agent/contract";
+    private static final String TRANSFER_AGENT_EOD_PATH = "/transfer-agent/eod";
     private static final String ORDER_AUDIT_PATH = "/orders/audit";
     private static final String VIEW_RECONCILIATION_PATH = "/view/reconciliation";
     private static final String RECONCILIATION_RESOLVE_PATH = "/view/reconciliation/resolve";
@@ -179,36 +180,65 @@ public class OrderRestServer implements SseBroadcaster {
         this.tokenStore = new InMemorySessionStore();
         this.httpServer = HttpServer.create(new InetSocketAddress(port), 0);
         com.iiit.oms.filter.LatencyFilter latencyFilter = new com.iiit.oms.filter.LatencyFilter();
-        this.httpServer.createContext(ADVISOR_ORDERS_PLAN_PATH, withCors(new AdvisorPlanOrdersHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(ADVISOR_ORDERS_PATH, withCors(new AdvisorOrdersHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(ADVISOR_DASHBOARD_PATH, withCors(new AdvisorDashboardHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(ADVISOR_CLIENTS_PATH, withCors(new AdvisorClientsHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(ADVISOR_ME_PATH, withCors(new AdvisorMeHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(PLAN_ORDERS_PATH, withCors(new PlanOrdersHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(CANCEL_ORDERS_PATH, withCors(new CancelOrderHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(LIST_ORDERS_PATH, withCors(new ListOrdersHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(ORDER_STATUS_PATH, withCors(new OrderStatusHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(CONFIRM_ORDERS_PATH, withCors(new ConfirmOrdersHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(BOOK_ORDERS_PATH, withCors(new BookOrdersHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(VIEW_ORDERS_PATH, withCors(new ViewOrdersHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(VIEW_BULK_ORDERS_PATH, withCors(new ViewBulkOrdersHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(VIEW_TRANSACTIONS_PATH, withCors(new TransactionsHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(VIEW_DASHBOARD_PATH, withCors(new ViewDashboardHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(VIEW_AGGREGATES_ACCOUNTS_PATH, withCors(new ViewAggregateAccountsHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(VIEW_AGGREGATES_FUNDS_PATH, withCors(new ViewAggregateFundsHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(VIEW_REPLAY_PATH, withCors(new ViewReplayHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(VIEW_STREAM_PATH, withCors(new ViewStreamHandler())).getFilters().add(latencyFilter);
+        this.httpServer.createContext(ADVISOR_ORDERS_PLAN_PATH, withCors(new AdvisorPlanOrdersHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(ADVISOR_ORDERS_PATH, withCors(new AdvisorOrdersHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(ADVISOR_DASHBOARD_PATH, withCors(new AdvisorDashboardHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(ADVISOR_CLIENTS_PATH, withCors(new AdvisorClientsHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(ADVISOR_ME_PATH, withCors(new AdvisorMeHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(PLAN_ORDERS_PATH, withCors(new PlanOrdersHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(CANCEL_ORDERS_PATH, withCors(new CancelOrderHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(LIST_ORDERS_PATH, withCors(new ListOrdersHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(ORDER_STATUS_PATH, withCors(new OrderStatusHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(CONFIRM_ORDERS_PATH, withCors(new ConfirmOrdersHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(BOOK_ORDERS_PATH, withCors(new BookOrdersHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(VIEW_ORDERS_PATH, withCors(new ViewOrdersHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(VIEW_BULK_ORDERS_PATH, withCors(new ViewBulkOrdersHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(VIEW_TRANSACTIONS_PATH, withCors(new TransactionsHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(VIEW_DASHBOARD_PATH, withCors(new ViewDashboardHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(VIEW_AGGREGATES_ACCOUNTS_PATH, withCors(new ViewAggregateAccountsHandler()))
+                .getFilters().add(latencyFilter);
+        this.httpServer.createContext(VIEW_AGGREGATES_FUNDS_PATH, withCors(new ViewAggregateFundsHandler()))
+                .getFilters().add(latencyFilter);
+        this.httpServer.createContext(VIEW_REPLAY_PATH, withCors(new ViewReplayHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(VIEW_STREAM_PATH, withCors(new ViewStreamHandler())).getFilters()
+                .add(latencyFilter);
         this.httpServer.createContext(VIEW_UI_PATH, withCors(new ViewUiHandler())).getFilters().add(latencyFilter);
         this.httpServer.createContext(FUNDS_PATH, withCors(new ListFundsHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(ACCOUNTS_PATH, withCors(new ListAccountsHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(AUTH_LOGIN_PATH, withCors(new AuthLoginHandler())).getFilters().add(latencyFilter);
+        this.httpServer.createContext(ACCOUNTS_PATH, withCors(new ListAccountsHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(AUTH_LOGIN_PATH, withCors(new AuthLoginHandler())).getFilters()
+                .add(latencyFilter);
         this.httpServer.createContext(AUTH_ME_PATH, withCors(new AuthMeHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(AUTH_LOGOUT_PATH, withCors(new AuthLogoutHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(VIEW_USERS_PATH, withCors(new ViewUsersHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(TRANSFER_AGENT_CONTRACT_PATH, withCors(new ContractCallbackHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(ORDER_AUDIT_PATH, withCors(new AuditLogHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(RECONCILIATION_RESOLVE_PATH, withCors(new ResolveReconciliationHandler())).getFilters().add(latencyFilter);
-        this.httpServer.createContext(VIEW_RECONCILIATION_PATH, withCors(new ViewReconciliationHandler())).getFilters().add(latencyFilter);
+        this.httpServer.createContext(AUTH_LOGOUT_PATH, withCors(new AuthLogoutHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(VIEW_USERS_PATH, withCors(new ViewUsersHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(TRANSFER_AGENT_CONTRACT_PATH, withCors(new ContractCallbackHandler()))
+                .getFilters().add(latencyFilter);
+        this.httpServer.createContext(TRANSFER_AGENT_EOD_PATH, withCors(new EndOfDayHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(ORDER_AUDIT_PATH, withCors(new AuditLogHandler())).getFilters()
+                .add(latencyFilter);
+        this.httpServer.createContext(RECONCILIATION_RESOLVE_PATH, withCors(new ResolveReconciliationHandler()))
+                .getFilters().add(latencyFilter);
+        this.httpServer.createContext(VIEW_RECONCILIATION_PATH, withCors(new ViewReconciliationHandler())).getFilters()
+                .add(latencyFilter);
         this.httpServer.createContext(PORTFOLIO_PATH, withCors(new PortfolioHandler())).getFilters().add(latencyFilter);
         this.httpServer.createContext(FUNDS_NAV_PATH, withCors(new UpdateNavHandler())).getFilters().add(latencyFilter);
         this.httpServer.setExecutor(Executors.newFixedThreadPool(16));
@@ -302,27 +332,30 @@ public class OrderRestServer implements SseBroadcaster {
             if (orderId == null) {
                 try {
                     InputStream is = exchange.getRequestBody();
-                    Map<String, String> body = objectMapper.readValue(is, new TypeReference<Map<String,String>>() {});
+                    Map<String, String> body = objectMapper.readValue(is, new TypeReference<Map<String, String>>() {
+                    });
                     orderId = body.get("orderID");
-                } catch (Exception e) {}
+                } catch (Exception e) {
+                }
             }
-            
+
             if (orderId == null) {
                 sendJsonResponse(exchange, 400, Map.of("message", "Missing orderID"));
                 return;
             }
-            
+
             Optional<Order> orderOpt = orderRepository.findByOrderId(orderId);
             if (orderOpt.isEmpty()) {
                 sendJsonResponse(exchange, 404, Map.of("message", "Order not found"));
                 return;
             }
             Order order = orderOpt.get();
-            if (!"ADMIN".equals(user.getRole()) && !"ADVISOR".equals(user.getRole()) && (user.getAccountID() != null && !user.getAccountID().equals(order.getAccountID()))) {
+            if (!"ADMIN".equals(user.getRole()) && !"ADVISOR".equals(user.getRole())
+                    && (user.getAccountID() != null && !user.getAccountID().equals(order.getAccountID()))) {
                 sendJsonResponse(exchange, 403, Map.of("message", "Unauthorized to cancel this order"));
                 return;
             }
-            
+
             try {
                 Order canceled = orderStateMachine.cancel(order);
                 orderRepository.save(canceled);
@@ -354,22 +387,23 @@ public class OrderRestServer implements SseBroadcaster {
             }
             User user = session.getUser();
             String accountId = user.getAccountID();
-            
+
             if (accountId == null) {
                 String query = exchange.getRequestURI().getQuery();
                 if (query != null && query.contains("accountID=")) {
                     for (String param : query.split("&")) {
-                        if (param.startsWith("accountID=")) accountId = param.split("=")[1];
+                        if (param.startsWith("accountID="))
+                            accountId = param.split("=")[1];
                     }
                 }
             }
-            
+
             final String targetAccountId = accountId;
             java.util.List<Order> transactions = orderRepository.findAll().stream()
-                .filter(o -> o.getOrderStatus() == OrderStatus.BOOKED)
-                .filter(o -> targetAccountId == null || targetAccountId.equals(o.getAccountID()))
-                .collect(java.util.stream.Collectors.toList());
-            
+                    .filter(o -> o.getOrderStatus() == OrderStatus.BOOKED)
+                    .filter(o -> targetAccountId == null || targetAccountId.equals(o.getAccountID()))
+                    .collect(java.util.stream.Collectors.toList());
+
             transactions.sort(Comparator.comparing(Order::getOrderID).reversed());
             sendJsonResponse(exchange, 200, transactions);
         }
@@ -902,7 +936,8 @@ public class OrderRestServer implements SseBroadcaster {
                         String accountID = entry.getKey();
                         List<OrderView> accountOrders = entry.getValue();
                         BigDecimal totalAmount = accountOrders.stream()
-                                .filter(o -> !"ERRORED".equals(o.getOrderStatus()) && !"FAILED".equals(o.getOrderStatus()) && !"SELL".equals(o.getOrderSide()))
+                                .filter(o -> !"ERRORED".equals(o.getOrderStatus())
+                                        && !"FAILED".equals(o.getOrderStatus()) && !"SELL".equals(o.getOrderSide()))
                                 .map(OrderView::getAmount)
                                 .filter(Objects::nonNull)
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -949,7 +984,8 @@ public class OrderRestServer implements SseBroadcaster {
                         String fundID = entry.getKey();
                         List<OrderView> fundOrders = entry.getValue();
                         BigDecimal totalAmount = fundOrders.stream()
-                                .filter(o -> !"ERRORED".equals(o.getOrderStatus()) && !"FAILED".equals(o.getOrderStatus()) && !"SELL".equals(o.getOrderSide()))
+                                .filter(o -> !"ERRORED".equals(o.getOrderStatus())
+                                        && !"FAILED".equals(o.getOrderStatus()) && !"SELL".equals(o.getOrderSide()))
                                 .map(OrderView::getAmount)
                                 .filter(Objects::nonNull)
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -1231,7 +1267,8 @@ public class OrderRestServer implements SseBroadcaster {
                 if (projectionStore != null) {
                     List<OrderView> orders = projectionStore.findOrdersByAccount(accountID);
                     BigDecimal totalAmount = orders.stream()
-                            .filter(o -> !"ERRORED".equals(o.getOrderStatus()) && !"FAILED".equals(o.getOrderStatus()) && !"SELL".equals(o.getOrderSide()))
+                            .filter(o -> !"ERRORED".equals(o.getOrderStatus()) && !"FAILED".equals(o.getOrderStatus())
+                                    && !"SELL".equals(o.getOrderSide()))
                             .map(OrderView::getAmount).filter(Objects::nonNull)
                             .reduce(BigDecimal.ZERO, BigDecimal::add);
                     BigDecimal totalQuantity = orders.stream().map(OrderView::getQuantity).filter(Objects::nonNull)
@@ -1381,7 +1418,8 @@ public class OrderRestServer implements SseBroadcaster {
                     .count();
             long failedOrders = allOrders.stream().filter(o -> "ERRORED".equals(o.getOrderStatus())).count();
             BigDecimal totalAmount = allOrders.stream()
-                    .filter(o -> !"ERRORED".equals(o.getOrderStatus()) && !"FAILED".equals(o.getOrderStatus()) && !"SELL".equals(o.getOrderSide()))
+                    .filter(o -> !"ERRORED".equals(o.getOrderStatus()) && !"FAILED".equals(o.getOrderStatus())
+                            && !"SELL".equals(o.getOrderSide()))
                     .map(OrderView::getAmount).filter(Objects::nonNull)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
             Map<String, Object> dashboard = new HashMap<>();
@@ -1755,14 +1793,17 @@ public class OrderRestServer implements SseBroadcaster {
                     if (!hasBreak) {
                         orderStateMachine.advanceToBooked(order);
                         orderRepository.save(order);
-                        
+
                         // CASH MANAGEMENT: Debit or Credit upon finalized booking
                         if (accountRepository != null && order.getAllocatedShares() != null && nav != null) {
-                            Optional<com.iiit.oms.model.Account> accOpt = accountRepository.findByAccountId(order.getAccountID());
+                            Optional<com.iiit.oms.model.Account> accOpt = accountRepository
+                                    .findByAccountId(order.getAccountID());
                             if (accOpt.isPresent()) {
                                 com.iiit.oms.model.Account acc = accOpt.get();
-                                BigDecimal executedAmount = order.getAllocatedShares().multiply(nav).setScale(4, java.math.RoundingMode.HALF_UP);
-                                if (order.getOrderSide() == null || order.getOrderSide() == com.iiit.oms.model.OrderSide.BUY) {
+                                BigDecimal executedAmount = order.getAllocatedShares().multiply(nav).setScale(4,
+                                        java.math.RoundingMode.HALF_UP);
+                                if (order.getOrderSide() == null
+                                        || order.getOrderSide() == com.iiit.oms.model.OrderSide.BUY) {
                                     acc.setCashBalance(acc.getCashBalance().subtract(executedAmount));
                                 } else if (order.getOrderSide() == com.iiit.oms.model.OrderSide.SELL) {
                                     acc.setCashBalance(acc.getCashBalance().add(executedAmount));
@@ -1815,6 +1856,132 @@ public class OrderRestServer implements SseBroadcaster {
                 LOGGER.severe("Contract callback failed: " + ex.getMessage());
                 sendJsonResponse(exchange, 500,
                         Map.of("message", "Failed to process contract callback: " + ex.getMessage()));
+            }
+        }
+    }
+
+    private final class EndOfDayHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                sendJsonResponse(exchange, 405, Map.of("message", "Only POST is supported"));
+                return;
+            }
+            if (bulkOrderRepository == null || bulkOrderMappingRepository == null || orderStateMachine == null) {
+                sendJsonResponse(exchange, 500, Map.of("message", "EOD endpoint not configured"));
+                return;
+            }
+            try {
+                List<BulkOrder> pendingBulkOrders = bulkOrderRepository.findAll().stream()
+                        .filter(b -> b.getBulkOrderStatus() == BulkOrderStatus.TRANSMITTED
+                                || b.getBulkOrderStatus() == BulkOrderStatus.CONFIRMED)
+                        .collect(Collectors.toList());
+
+                int processedBulks = 0;
+                int totalContracted = 0;
+                int totalBooked = 0;
+
+                for (BulkOrder bulkOrder : pendingBulkOrders) {
+                    Optional<Fund> maybeFund = resolveFund(bulkOrder.getProductID());
+                    if (maybeFund.isEmpty() || maybeFund.get().getNAV() == null
+                            || maybeFund.get().getNAV().compareTo(BigDecimal.ZERO) <= 0) {
+                        continue; // Cannot process without valid NAV
+                    }
+
+                    BigDecimal nav = maybeFund.get().getNAV();
+                    BigDecimal bulkAmount = bulkOrder.getAmount() != null ? bulkOrder.getAmount() : BigDecimal.ZERO;
+                    if (bulkAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                        continue;
+                    }
+
+                    BigDecimal totalShares = bulkAmount.divide(nav, 8, java.math.RoundingMode.HALF_UP);
+                    String contractRef = "EOD-" + System.currentTimeMillis() + "-" + bulkOrder.getOrderID();
+
+                    List<String> individualOrderIds = bulkOrderMappingRepository
+                            .findIndividualOrderIds(bulkOrder.getOrderID()).orElse(List.of());
+
+                    boolean hasBreak = false; // For EOD, assume no break since we trust our own NAV, but we could do
+                                              // check. Let's assume false.
+
+                    int contracted = 0;
+                    int booked = 0;
+
+                    for (String orderId : individualOrderIds) {
+                        Optional<Order> maybeOrder = orderRepository.findByOrderId(orderId);
+                        if (maybeOrder.isEmpty())
+                            continue;
+                        Order order = maybeOrder.get();
+
+                        BigDecimal allocatedShares = BigDecimal.ZERO;
+                        if (order.getAmount() != null) {
+                            allocatedShares = order.getAmount()
+                                    .divide(bulkAmount, 10, java.math.RoundingMode.HALF_UP)
+                                    .multiply(totalShares)
+                                    .setScale(8, java.math.RoundingMode.HALF_UP);
+                        }
+
+                        orderStateMachine.advanceToContracted(order, contractRef, nav, allocatedShares);
+                        orderRepository.save(order);
+                        contracted++;
+
+                        if (!hasBreak) {
+                            orderStateMachine.advanceToBooked(order);
+                            orderRepository.save(order);
+
+                            if (accountRepository != null && order.getAllocatedShares() != null && nav != null) {
+                                Optional<com.iiit.oms.model.Account> accOpt = accountRepository
+                                        .findByAccountId(order.getAccountID());
+                                if (accOpt.isPresent()) {
+                                    com.iiit.oms.model.Account acc = accOpt.get();
+                                    BigDecimal executedAmount = order.getAllocatedShares().multiply(nav).setScale(4,
+                                            java.math.RoundingMode.HALF_UP);
+                                    if (order.getOrderSide() == null
+                                            || order.getOrderSide() == com.iiit.oms.model.OrderSide.BUY) {
+                                        acc.setCashBalance(acc.getCashBalance().subtract(executedAmount));
+                                    } else if (order.getOrderSide() == com.iiit.oms.model.OrderSide.SELL) {
+                                        acc.setCashBalance(acc.getCashBalance().add(executedAmount));
+                                    }
+                                    accountRepository.save(acc);
+                                }
+                            }
+                            booked++;
+                        }
+
+                        if (projectionListener != null && maybeFund.isPresent()) {
+                            projectionListener.onOrderStatusChanged(order, bulkOrder, maybeFund.get());
+                            publishViewEvent("order-updated", toOrderEventPayload(order, bulkOrder.getOrderID()));
+                        }
+                    }
+
+                    bulkOrder.setContractRef(contractRef);
+                    bulkOrder.setBulkNav(nav);
+                    bulkOrder.setBulkOrderStatus(BulkOrderStatus.CONTRACTED);
+                    bulkOrderRepository.save(bulkOrder);
+
+                    if (!hasBreak) {
+                        bulkOrder.setBulkOrderStatus(BulkOrderStatus.BOOKED);
+                        bulkOrderRepository.save(bulkOrder);
+                    }
+
+                    if (projectionListener != null && maybeFund.isPresent()) {
+                        projectionListener.onBulkOrderStatusChanged(bulkOrder, maybeFund.get(), individualOrderIds);
+                        publishViewEvent("bulk-order-updated", toBulkOrderEventPayload(bulkOrder, individualOrderIds));
+                    }
+
+                    processedBulks++;
+                    totalContracted += contracted;
+                    totalBooked += booked;
+                }
+
+                Map<String, Object> response = Map.of(
+                        "message", "EOD processing completed",
+                        "processedBulks", processedBulks,
+                        "contractedOrders", totalContracted,
+                        "bookedOrders", totalBooked);
+                sendJsonResponse(exchange, 200, response);
+            } catch (Exception ex) {
+                LOGGER.severe("Failed to process EOD: " + ex.getMessage());
+                sendJsonResponse(exchange, 500, Map.of("message", "Failed to process EOD"));
             }
         }
     }
@@ -1882,7 +2049,7 @@ public class OrderRestServer implements SseBroadcaster {
 
                 // Get all orders to calculate pending sells
                 List<Order> allOrders = orderRepository.findAll();
-                
+
                 // Track pending sell amounts per account+fund
                 Map<String, BigDecimal> pendingSellCash = new HashMap<>();
                 BigDecimal pendingBuyCash = BigDecimal.ZERO;
@@ -1891,8 +2058,10 @@ public class OrderRestServer implements SseBroadcaster {
                     if (o.getOrderStatus() != OrderStatus.BOOKED && o.getOrderStatus() != OrderStatus.ERRORED) {
                         if (o.getOrderSide() == OrderSide.SELL && o.getAmount() != null) {
                             String key = o.getAccountID() + ":" + o.getProductID();
-                            pendingSellCash.put(key, pendingSellCash.getOrDefault(key, BigDecimal.ZERO).add(o.getAmount()));
-                        } else if ((o.getOrderSide() == null || o.getOrderSide() == OrderSide.BUY) && o.getAmount() != null) {
+                            pendingSellCash.put(key,
+                                    pendingSellCash.getOrDefault(key, BigDecimal.ZERO).add(o.getAmount()));
+                        } else if ((o.getOrderSide() == null || o.getOrderSide() == OrderSide.BUY)
+                                && o.getAmount() != null) {
                             if (accountFilter != null && accountFilter.equals(o.getAccountID())) {
                                 pendingBuyCash = pendingBuyCash.add(o.getAmount());
                             }
@@ -1904,9 +2073,11 @@ public class OrderRestServer implements SseBroadcaster {
                 List<Order> bookedOrders = allOrders.stream()
                         .filter(o -> o.getOrderStatus() == OrderStatus.BOOKED)
                         .filter(o -> o.getNav() != null && o.getAllocatedShares() != null)
-                        .filter(o -> accountFilter == null || accountFilter.isBlank() || accountFilter.equals(o.getAccountID()))
+                        .filter(o -> accountFilter == null || accountFilter.isBlank()
+                                || accountFilter.equals(o.getAccountID()))
                         .sorted(Comparator.comparing((Order o) -> o.getTradeDate() == null ? "" : o.getTradeDate())
-                                .thenComparingInt(o -> (o.getOrderSide() == null || o.getOrderSide() == OrderSide.BUY) ? 0 : 1))
+                                .thenComparingInt(
+                                        o -> (o.getOrderSide() == null || o.getOrderSide() == OrderSide.BUY) ? 0 : 1))
                         .collect(Collectors.toList());
 
                 // Build a fund NAV lookup (current live NAVs)
@@ -1985,10 +2156,12 @@ public class OrderRestServer implements SseBroadcaster {
                             : BigDecimal.ZERO;
 
                     // Calculate pending shares equivalent
-                    BigDecimal currentPendingCash = pendingSellCash.getOrDefault(h.get("accountID") + ":" + fundId, BigDecimal.ZERO);
-                    BigDecimal pendingShares = liveNav.compareTo(BigDecimal.ZERO) > 0 ? 
-                            currentPendingCash.divide(liveNav, 6, java.math.RoundingMode.HALF_UP) : BigDecimal.ZERO;
-                    
+                    BigDecimal currentPendingCash = pendingSellCash.getOrDefault(h.get("accountID") + ":" + fundId,
+                            BigDecimal.ZERO);
+                    BigDecimal pendingShares = liveNav.compareTo(BigDecimal.ZERO) > 0
+                            ? currentPendingCash.divide(liveNav, 6, java.math.RoundingMode.HALF_UP)
+                            : BigDecimal.ZERO;
+
                     BigDecimal availableShares = shares.subtract(pendingShares);
                     if (availableShares.compareTo(BigDecimal.ZERO) < 0) {
                         availableShares = BigDecimal.ZERO;
@@ -2030,7 +2203,8 @@ public class OrderRestServer implements SseBroadcaster {
                     Optional<com.iiit.oms.model.Account> accOpt = accountRepository.findByAccountId(accountFilter);
                     if (accOpt.isPresent() && accOpt.get().getCashBalance() != null) {
                         BigDecimal availableCash = accOpt.get().getCashBalance().subtract(pendingBuyCash);
-                        if (availableCash.compareTo(BigDecimal.ZERO) < 0) availableCash = BigDecimal.ZERO;
+                        if (availableCash.compareTo(BigDecimal.ZERO) < 0)
+                            availableCash = BigDecimal.ZERO;
                         response.put("availableCash", availableCash);
                     }
                 }

@@ -110,6 +110,26 @@ export default function BulkOrders({ sseEventCount = 0 }) {
   const [expanded, setExpanded] = useState({})
   const [contractModal, setContractModal] = useState(null)
   const [contractSuccess, setContractSuccess] = useState(null)
+  const [eodProcessing, setEodProcessing] = useState(false)
+
+  const handleEod = async () => {
+    if (!window.confirm("Are you sure you want to run End of Day processing on all active bulk orders?")) return;
+    setEodProcessing(true);
+    setError(null);
+    try {
+      const res = await fetch(`${CONFIG.API_BASE_URL}/transfer-agent/eod`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'EOD processing failed');
+      setContractSuccess(`EOD processed! ${data.processedBulks} bulks, ${data.bookedOrders} orders booked.`);
+      getBulkOrderViews().then(setBulkOrders).catch(() => { });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEodProcessing(false);
+    }
+  };
 
   useEffect(() => {
     // Only show full-screen loader on first load; use silent refresh on SSE events
@@ -161,14 +181,24 @@ export default function BulkOrders({ sseEventCount = 0 }) {
         <div className="bulk-orders-count" style={{ margin: 0 }}>
           Showing {filtered.length} of {bulkOrders.length} bulk orders
         </div>
-        <button 
-          className="recon-refresh-btn" 
-          onClick={() => exportToCsv('bulk_orders.csv', filtered)} 
-          disabled={filtered.length === 0}
-          style={{ padding: '6px 12px', fontSize: '12px', background: 'white', border: '1px solid #ccc', borderRadius: '4px', cursor: filtered.length ? 'pointer' : 'not-allowed', opacity: filtered.length ? 1 : 0.6 }}
-        >
-          ⤓ Export CSV
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            className="btn-primary"
+            onClick={handleEod}
+            disabled={eodProcessing || bulkOrders.length === 0}
+            style={{ padding: '6px 12px', fontSize: '12px' }}
+          >
+            {eodProcessing ? "Processing..." : "End of Day Processing"}
+          </button>
+          <button
+            className="recon-refresh-btn"
+            onClick={() => exportToCsv('bulk_orders.csv', filtered)}
+            disabled={filtered.length === 0}
+            style={{ padding: '6px 12px', fontSize: '12px', background: 'white', border: '1px solid #ccc', borderRadius: '4px', cursor: filtered.length ? 'pointer' : 'not-allowed', opacity: filtered.length ? 1 : 0.6 }}
+          >
+            ⤓ Export CSV
+          </button>
+        </div>
       </div>
       <div className="card" style={{ padding: 0 }}>
         <div style={{ overflowX: 'auto' }}>
