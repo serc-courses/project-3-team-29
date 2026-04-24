@@ -444,6 +444,16 @@ public class OrderRestServer implements SseBroadcaster {
             try {
                 Order canceled = orderStateMachine.cancel(order);
                 orderRepository.save(canceled);
+
+                // Update the read-model projection store so view/orders returns the new CANCELLED status.
+                // Without this, the projection store serves stale data after cancel.
+                if (projectionListener != null && fundRepository != null) {
+                    Optional<com.iiit.oms.model.Fund> maybeFund = resolveFund(canceled.getProductID());
+                    if (maybeFund.isPresent()) {
+                        projectionListener.onOrderStatusChanged(canceled, null, maybeFund.get());
+                    }
+                }
+
                 broadcastOrderUpdate(canceled, null);
                 sendJsonResponse(exchange, 200, canceled);
             } catch (IllegalStateException e) {

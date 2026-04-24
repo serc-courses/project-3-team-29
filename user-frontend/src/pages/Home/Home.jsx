@@ -62,10 +62,15 @@ export default function Home({ sseEventCount = 0 }) {
   )
   const orders = rawOrders || []
 
-  const { data: portfolioData } = useFetch(
+  const { data: portfolioData, refetch: refetchPortfolio } = useFetch(
     () => accountID ? getPortfolio(accountID) : Promise.resolve(null),
     [sseEventCount, accountID]
   )
+
+  const handleCancelSuccess = () => {
+    refetch()
+    refetchPortfolio()
+  }
 
   const stats = useMemo(() => {
     const totalInvested = orders.reduce((sum, o) => {
@@ -198,7 +203,7 @@ export default function Home({ sseEventCount = 0 }) {
         ) : (
           <div className="home-orders-list">
             {recentOrders.map(order => (
-              <OrderCard key={order.orderID} order={order} />
+              <OrderCard key={order.orderID} order={order} onCancelSuccess={handleCancelSuccess} />
             ))}
           </div>
         )}

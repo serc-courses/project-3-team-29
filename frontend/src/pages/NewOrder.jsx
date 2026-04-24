@@ -154,7 +154,7 @@ export default function NewOrder() {
                 {row.errors.accountID && <div className="field-error">{row.errors.accountID}</div>}
               </div>
               <div>
-                <label className="form-label">Amount (USD)</label>
+                <label className="form-label">Amount (₹)</label>
                 <input
                   className="form-input"
                   type="number"
