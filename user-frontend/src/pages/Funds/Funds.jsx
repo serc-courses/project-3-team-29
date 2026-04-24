@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { getFunds } from '../../api/portfolioApi'
 import { useFetch } from '../../hooks/useFetch'
+import { useAuth } from '../../context/AuthContext'
 import FundCard from '../../components/FundCard/FundCard'
 import EmptyState from '../../components/EmptyState/EmptyState'
 import './Funds.css'
@@ -25,9 +26,11 @@ function NoFundsIcon() {
   )
 }
 
-export default function Funds() {
+export default function Funds({ sseEventCount = 0 }) {
   const [search, setSearch] = useState('')
-  const { data, loading } = useFetch(getFunds, [])
+  const { user } = useAuth()
+  const accountID = user?.accountID
+  const { data, loading } = useFetch(() => getFunds(accountID), [accountID, sseEventCount])
   const funds = data || []
 
   const filtered = useMemo(() => {

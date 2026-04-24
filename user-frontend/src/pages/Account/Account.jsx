@@ -19,6 +19,15 @@ const STATUS_BARS = [
   { key: 'failed',    label: 'Failed',    statuses: STATUS_GROUP.FAILED,    color: '#DC2626' },
 ]
 
+const toOrderTime = (order) => {
+  if ((order?.createdAt ?? 0) > 0) return order.createdAt
+  if (order?.tradeDate) {
+    const t = Date.parse(`${order.tradeDate}T00:00:00Z`)
+    if (!Number.isNaN(t)) return t
+  }
+  return 0
+}
+
 const DONUT_GROUPS = [
   { name: 'Completed', statuses: STATUS_GROUP.COMPLETED,  color: '#059669' },
   { name: 'Pending',   statuses: STATUS_GROUP.PENDING,    color: '#D97706' },
@@ -91,7 +100,7 @@ export default function Account() {
 
   const totalAmount   = useMemo(() => orders.reduce((s, o) => s + (o.amount   || 0), 0), [orders])
   const totalQuantity = useMemo(() => orders.reduce((s, o) => s + (o.quantity || 0), 0), [orders])
-  const recentOrders  = useMemo(() => [...orders].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)).slice(0, 5), [orders])
+  const recentOrders  = useMemo(() => [...orders].sort((a, b) => toOrderTime(b) - toOrderTime(a)).slice(0, 5), [orders])
 
   /* Advisor derived data */
   const advisorDonutData = useMemo(() => {

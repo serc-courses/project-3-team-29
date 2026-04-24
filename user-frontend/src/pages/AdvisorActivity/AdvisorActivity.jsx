@@ -35,6 +35,15 @@ const CHART_GROUPS = [
   { name: 'Failed',     color: '#DC2626', key: 'failed'     },
 ]
 
+const toOrderTime = (order) => {
+  if ((order?.createdAt ?? 0) > 0) return order.createdAt
+  if (order?.tradeDate) {
+    const t = Date.parse(`${order.tradeDate}T00:00:00Z`)
+    if (!Number.isNaN(t)) return t
+  }
+  return 0
+}
+
 export default function AdvisorActivity({ advisorId, sseEventCount = 0 }) {
   const id = advisorId || ADVISOR_CONFIG.DEFAULT_ADVISOR_ID
   const navigate = useNavigate()
@@ -68,7 +77,7 @@ export default function AdvisorActivity({ advisorId, sseEventCount = 0 }) {
     if (sf?.statuses) list = list.filter(o => sf.statuses.includes(o.orderStatus))
     if (sideFilter !== 'all') list = list.filter(o => o.orderSide === sideFilter)
     if (fundSearch.trim()) list = list.filter(o => o.fundID?.toLowerCase().includes(fundSearch.toLowerCase()) || o.fundName?.toLowerCase().includes(fundSearch.toLowerCase()))
-    return [...list].sort((a, b) => b.orderID?.localeCompare(a.orderID))
+    return [...list].sort((a, b) => toOrderTime(b) - toOrderTime(a))
   }, [allOrders, clientFilter, statusFilter, sideFilter, fundSearch])
 
   /* Summary strip derived from filtered list */

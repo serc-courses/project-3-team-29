@@ -1,7 +1,5 @@
-import { useState } from 'react'
-import { NavLink, Link } from 'react-router-dom'
-import { NAV_ITEMS, ROUTES } from '../../constants/routes'
-import { confirmOrders, bookOrders } from '../../api/operationsApi'
+import { NavLink } from 'react-router-dom'
+import { NAV_ITEMS } from '../../constants/routes'
 
 /* ─── Inline SVG icons ───────────────────────────────────────────────────────── */
 const LogoIcon = () => (
@@ -83,13 +81,6 @@ const IconRecon = () => (
   </svg>
 )
 
-const IconPortfolio = () => (
-  <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
-    <polyline points="1,13 4,9 7,10 10,5 14,2" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-    <polyline points="10,2 14,2 14,5" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-)
-
 const NAV_ICONS = {
   dashboard: <IconDashboard />,
   orders: <IconOrders />,
@@ -99,119 +90,38 @@ const NAV_ICONS = {
   users: <IconUsers />,
   aggregateFunds: <IconFunds />,
   reconciliation: <IconRecon />,
-  portfolio: <IconPortfolio />,
-}
-
-/* ─── Toast ──────────────────────────────────────────────────────────────────── */
-function Toast({ message, type, onClose }) {
-  return (
-    <div className={`toast toast-${type}`} onClick={onClose}>
-      {message}
-    </div>
-  )
 }
 
 /* ─── Sidebar ────────────────────────────────────────────────────────────────── */
 export default function Sidebar() {
-  const [loadingConfirm, setLoadingConfirm] = useState(false)
-  const [loadingBook, setLoadingBook] = useState(false)
-  const [toast, setToast] = useState(null)
-
-  const showToast = (message, type) => {
-    setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
-  }
-
-  const handleConfirm = async () => {
-    setLoadingConfirm(true)
-    try {
-      await confirmOrders()
-      showToast('Orders confirmed successfully', 'success')
-    } catch (err) {
-      showToast(err.message || 'Failed to confirm orders', 'error')
-    } finally {
-      setLoadingConfirm(false)
-    }
-  }
-
-  const handleBook = async () => {
-    setLoadingBook(true)
-    try {
-      await bookOrders()
-      showToast('Orders booked successfully', 'success')
-    } catch (err) {
-      showToast(err.message || 'Failed to book orders', 'error')
-    } finally {
-      setLoadingBook(false)
-    }
-  }
 
   return (
-    <>
-      <aside className="sidebar">
-        <div className="sidebar-logo">
-          <span className="sidebar-logo-icon">
-            <LogoIcon />
-          </span>
-          <div>
-            <div className="sidebar-logo-text">MF-OMS</div>
-            <div className="sidebar-logo-sub">Mutual Fund OMS</div>
-          </div>
+    <aside className="sidebar">
+      <div className="sidebar-logo">
+        <span className="sidebar-logo-icon">
+          <LogoIcon />
+        </span>
+        <div>
+          <div className="sidebar-logo-text">MF-OMS</div>
+          <div className="sidebar-logo-sub">Mutual Fund OMS</div>
         </div>
+      </div>
 
-        <nav className="sidebar-nav">
-          {NAV_ITEMS.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              end={item.path === '/'}
-              className={({ isActive }) =>
-                `sidebar-nav-item${isActive ? ' active' : ''}`
-              }
-            >
-              <span className="sidebar-nav-icon">{NAV_ICONS[item.icon]}</span>
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="sidebar-divider" />
-
-        <div className="sidebar-operations">
-          <div className="sidebar-ops-title">Operations</div>
-          <Link to={ROUTES.NEW_ORDER} className="sidebar-btn sidebar-btn-new">
-            + New Order
-          </Link>
-          <button
-            className="sidebar-btn sidebar-btn-confirm"
-            onClick={handleConfirm}
-            disabled={loadingConfirm}
+      <nav className="sidebar-nav">
+        {NAV_ITEMS.map((item) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            end={item.path === '/'}
+            className={({ isActive }) =>
+              `sidebar-nav-item${isActive ? ' active' : ''}`
+            }
           >
-            {loadingConfirm
-              ? <span className="spinner" style={{ width: 13, height: 13, borderWidth: 2 }} />
-              : null}
-            Confirm Orders
-          </button>
-          <button
-            className="sidebar-btn sidebar-btn-book"
-            onClick={handleBook}
-            disabled={loadingBook}
-          >
-            {loadingBook
-              ? <span className="spinner" style={{ width: 13, height: 13, borderWidth: 2 }} />
-              : null}
-            Book Orders
-          </button>
-        </div>
-      </aside>
-
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
-    </>
+            <span className="sidebar-nav-icon">{NAV_ICONS[item.icon]}</span>
+            {item.label}
+          </NavLink>
+        ))}
+      </nav>
+    </aside>
   )
 }

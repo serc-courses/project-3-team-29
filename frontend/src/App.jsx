@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { BrowserRouter, Navigate, Routes, Route } from 'react-router-dom'
 import Layout from './components/Layout/Layout'
 import ProtectedRoute from './components/ProtectedRoute/ProtectedRoute'
@@ -12,7 +12,6 @@ import Users from './pages/Users'
 import NewOrder from './pages/NewOrder'
 import { useSse } from './hooks/useSse'
 import Reconciliation from './pages/Reconciliation'
-import Portfolio from './pages/Portfolio'
 import Login from './pages/Login'
 
 function AppContent() {
@@ -41,7 +40,6 @@ function AppContent() {
         <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
         <Route path="/orders/new" element={<ProtectedRoute><NewOrder /></ProtectedRoute>} />
         <Route path="/reconciliation" element={<ProtectedRoute><Reconciliation /></ProtectedRoute>} />
-        <Route path="/portfolio" element={<ProtectedRoute><Portfolio /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

@@ -16,6 +16,15 @@ const FILTERS = [
   { key: 'failed', label: 'Failed', statuses: STATUS_GROUP.FAILED },
 ]
 
+const toOrderTime = (order) => {
+  if ((order?.createdAt ?? 0) > 0) return order.createdAt
+  if (order?.tradeDate) {
+    const t = Date.parse(`${order.tradeDate}T00:00:00Z`)
+    if (!Number.isNaN(t)) return t
+  }
+  return 0
+}
+
 function SkeletonOrders() {
   return (
     <div className="page orders-page">
@@ -67,7 +76,7 @@ export default function Orders({ sseEventCount = 0 }) {
     const f = FILTERS.find(f => f.key === activeFilter)
     if (f?.statuses) list = list.filter(o => f.statuses.includes(o.orderStatus))
     if (search.trim()) list = list.filter(o => o.orderID?.toLowerCase().includes(search.toLowerCase()))
-    return [...list].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+    return [...list].sort((a, b) => toOrderTime(b) - toOrderTime(a))
   }, [orders, activeFilter, search])
 
   if (loading) return <SkeletonOrders />

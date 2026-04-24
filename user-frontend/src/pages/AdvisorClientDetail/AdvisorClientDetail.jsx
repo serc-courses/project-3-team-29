@@ -22,6 +22,15 @@ function BackIcon() {
   return (<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>)
 }
 
+const toOrderTime = (order) => {
+  if ((order?.createdAt ?? 0) > 0) return order.createdAt
+  if (order?.tradeDate) {
+    const t = Date.parse(`${order.tradeDate}T00:00:00Z`)
+    if (!Number.isNaN(t)) return t
+  }
+  return 0
+}
+
 export default function AdvisorClientDetail({ advisorId, sseEventCount = 0 }) {
   const { accountId } = useParams()
   const navigate = useNavigate()
@@ -42,7 +51,7 @@ export default function AdvisorClientDetail({ advisorId, sseEventCount = 0 }) {
   [orderList])
 
   const recentOrders = useMemo(() =>
-    [...orderList].sort((a, b) => b.orderID?.localeCompare(a.orderID)).slice(0, 5), [orderList])
+    [...orderList].sort((a, b) => toOrderTime(b) - toOrderTime(a)).slice(0, 5), [orderList])
 
   const totalAmount = useMemo(() => orderList.reduce((s, o) => s + (o.amount || 0), 0), [orderList])
   const totalQuantity = useMemo(() => orderList.reduce((s, o) => s + (o.quantity || 0), 0), [orderList])

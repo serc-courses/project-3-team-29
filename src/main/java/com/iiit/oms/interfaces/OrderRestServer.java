@@ -14,9 +14,7 @@ import com.iiit.oms.readmodel.BulkOrderView;
 import com.iiit.oms.readmodel.OrderProjectionListener;
 import com.iiit.oms.readmodel.OrderView;
 import com.iiit.oms.readmodel.ProjectionStore;
-import com.iiit.oms.model.Account;
 import com.iiit.oms.model.Advisor;
-import com.iiit.oms.model.AdvisorClientRelationship;
 import com.iiit.oms.model.User;
 import com.iiit.oms.model.UserSession;
 import com.iiit.oms.auth.SessionStore;
@@ -56,6 +54,8 @@ import java.security.KeyStore;
 import java.nio.charset.StandardCharsets;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -64,7 +64,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.logging.Logger;
@@ -443,8 +442,13 @@ public class OrderRestServer implements SseBroadcaster {
             }
 
             try {
+                OrderStatus previousStatus = order.getOrderStatus();
                 Order canceled = orderStateMachine.cancel(order);
                 orderRepository.save(canceled);
+
+                if (kafkaPublisher != null && kafkaPublisher.isEnabled()) {
+                    kafkaPublisher.publishOrderStateChanged(canceled, previousStatus.name());
+                }
 
                 // Update the read-model projection store so view/orders returns the new CANCELLED status.
                 // Without this, the projection store serves stale data after cancel.
@@ -756,6 +760,10 @@ public class OrderRestServer implements SseBroadcaster {
                         order.setOrderStatus(OrderStatus.CONFIRMED);
                         orderRepository.save(order);
 
+                        if (kafkaPublisher != null && kafkaPublisher.isEnabled()) {
+                            kafkaPublisher.publishOrderStateChanged(order, prevStatus.name());
+                        }
+
                         Optional<Fund> maybeFund = resolveFund(order.getProductID());
                         if (projectionListener != null && maybeFund.isPresent()) {
                             projectionListener.onOrderStatusChanged(order, bulkOrder, maybeFund.get());
@@ -941,7 +949,10 @@ public class OrderRestServer implements SseBroadcaster {
             }
 
             response = response.stream()
-                    .sorted(Comparator.comparing(OrderView::getOrderID))
+                    .sorted(Comparator
+                        .comparingLong((OrderView o) -> toOrderSortEpochMillis(o))
+                        .reversed()
+                        .thenComparing(OrderView::getOrderID, Comparator.nullsLast(Comparator.reverseOrder())))
                     .collect(Collectors.toList());
             sendJsonResponse(exchange, 200, response);
         }
@@ -993,6 +1004,13 @@ public class OrderRestServer implements SseBroadcaster {
 
             List<OrderView> orders = projectionStore.findAllOrderViews();
             List<BulkOrderView> bulkOrders = projectionStore.findAllBulkOrderViews();
+
+                orders = orders.stream()
+                    .sorted(Comparator
+                        .comparingLong((OrderView o) -> toOrderSortEpochMillis(o))
+                        .reversed()
+                        .thenComparing(OrderView::getOrderID, Comparator.nullsLast(Comparator.reverseOrder())))
+                    .collect(Collectors.toList());
 
                 Map<String, Long> ordersByStatus = orders.stream()
                     .collect(Collectors.groupingBy(
@@ -1082,7 +1100,37 @@ public class OrderRestServer implements SseBroadcaster {
                 return;
             }
 
+            UserSession session = resolveAuthenticatedUser(exchange);
+            if (session == null) {
+                sendJsonResponse(exchange, 401, Map.of("message", "Authentication required"));
+                return;
+            }
+
+            String query = exchange.getRequestURI().getQuery();
+            String requestedAccountID = getQueryParam(query, "accountID");
+            String effectiveAccountID = requestedAccountID;
+            String role = session.getUser().getRole();
+            String sessionAccountID = session.getUser().getAccountID();
+
+            if (!"ADMIN".equals(role) && !"ADVISOR".equals(role)) {
+                if (sessionAccountID != null && !sessionAccountID.isBlank()) {
+                    if (requestedAccountID != null && !requestedAccountID.isBlank()
+                            && !sessionAccountID.equals(requestedAccountID)) {
+                        sendJsonResponse(exchange, 403, Map.of("message", "Forbidden for requested account"));
+                        return;
+                    }
+                    effectiveAccountID = sessionAccountID;
+                }
+            }
+
             List<OrderView> orders = projectionStore.findAllOrderViews();
+            final String accountFilter = effectiveAccountID;
+            if (accountFilter != null && !accountFilter.isBlank()) {
+                orders = orders.stream()
+                        .filter(o -> accountFilter.equals(o.getAccountID()))
+                        .collect(Collectors.toList());
+            }
+
                 Map<String, List<OrderView>> grouped = orders.stream()
                     .collect(Collectors.groupingBy(o -> o.getFundID() != null ? o.getFundID() : "UNKNOWN_FUND"));
 
@@ -1097,6 +1145,9 @@ public class OrderRestServer implements SseBroadcaster {
                                 .filter(Objects::nonNull)
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
                         BigDecimal totalQuantity = fundOrders.stream()
+                            .filter(o -> !"ERRORED".equals(o.getOrderStatus())
+                                && !"FAILED".equals(o.getOrderStatus())
+                                && !"CANCELLED".equals(o.getOrderStatus()))
                                 .map(OrderView::getQuantity)
                                 .filter(Objects::nonNull)
                                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -1454,7 +1505,10 @@ public class OrderRestServer implements SseBroadcaster {
                     .filter(o -> filterFund == null || filterFund.isBlank() || filterFund.equals(o.getFundID()))
                     .filter(o -> filterStatus == null || filterStatus.isBlank()
                             || filterStatus.equalsIgnoreCase(o.getOrderStatus()))
-                    .sorted(Comparator.comparing(OrderView::getOrderID))
+                    .sorted(Comparator
+                        .comparingLong((OrderView o) -> toOrderSortEpochMillis(o))
+                        .reversed()
+                        .thenComparing(OrderView::getOrderID, Comparator.nullsLast(Comparator.reverseOrder())))
                     .collect(Collectors.toList());
 
             sendJsonResponse(exchange, 200, orders);
@@ -1893,8 +1947,21 @@ public class OrderRestServer implements SseBroadcaster {
         return null;
     }
 
-    private String buildIdempotencyKey(Order order) {
-        return order.getAccountID() + ":" + order.getProductID() + ":" + order.getAmount() + ":" + order.getOrderSide();
+    private long toOrderSortEpochMillis(OrderView orderView) {
+        if (orderView == null) {
+            return 0L;
+        }
+        if (orderView.getCreatedAt() > 0) {
+            return orderView.getCreatedAt();
+        }
+        String tradeDate = orderView.getTradeDate();
+        if (tradeDate != null && !tradeDate.isBlank()) {
+            try {
+                return LocalDate.parse(tradeDate).atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli();
+            } catch (Exception ignored) {
+            }
+        }
+        return 0L;
     }
 
     // --- SseBroadcaster implementation ---
@@ -2562,9 +2629,14 @@ public class OrderRestServer implements SseBroadcaster {
                         if (order.getOrderStatus() != OrderStatus.CONTRACTED)
                             continue;
 
+                        OrderStatus statusBeforeBooked = order.getOrderStatus();
                         orderStateMachine.advanceToBooked(order);
                         orderRepository.save(order);
                         affectedOrders++;
+
+                        if (kafkaPublisher != null && kafkaPublisher.isEnabled()) {
+                            kafkaPublisher.publishOrderStateChanged(order, statusBeforeBooked.name());
+                        }
 
                         // CASH MANAGEMENT: Debit or Credit upon ACCEPT-forced booking
                         // For BUY: deduct the original order amount (what the user paid), not
@@ -2610,12 +2682,17 @@ public class OrderRestServer implements SseBroadcaster {
                         if (order.getOrderStatus() != OrderStatus.CONTRACTED)
                             continue;
 
+                        OrderStatus statusBeforeRollback = order.getOrderStatus();
                         order.setOrderStatus(OrderStatus.TRANSMITTED);
                         order.setContractRef(null);
                         order.setNav(null);
                         order.setAllocatedShares(null);
                         orderRepository.save(order);
                         affectedOrders++;
+
+                        if (kafkaPublisher != null && kafkaPublisher.isEnabled()) {
+                            kafkaPublisher.publishOrderStateChanged(order, statusBeforeRollback.name());
+                        }
 
                         Optional<Fund> maybeFund = resolveFund(order.getProductID());
                         if (projectionListener != null && maybeFund.isPresent()) {
@@ -2641,10 +2718,15 @@ public class OrderRestServer implements SseBroadcaster {
                         if (order.getOrderStatus() != OrderStatus.CONTRACTED)
                             continue;
 
+                        OrderStatus statusBeforeError = order.getOrderStatus();
                         order.setOrderStatus(OrderStatus.ERRORED);
                         order.setErrorDescription("Cancelled due to unresolvable reconciliation break " + breakId);
                         orderRepository.save(order);
                         affectedOrders++;
+
+                        if (kafkaPublisher != null && kafkaPublisher.isEnabled()) {
+                            kafkaPublisher.publishOrderStateChanged(order, statusBeforeError.name());
+                        }
 
                         Optional<Fund> maybeFund = resolveFund(order.getProductID());
                         if (projectionListener != null && maybeFund.isPresent()) {

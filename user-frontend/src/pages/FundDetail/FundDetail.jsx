@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { getFunds } from '../../api/portfolioApi'
 import { getOrders } from '../../api/ordersApi'
 import { useFetch } from '../../hooks/useFetch'
+import { useAuth } from '../../context/AuthContext'
 import OrderCard from '../../components/OrderCard/OrderCard'
 import AmountDisplay from '../../components/AmountDisplay/AmountDisplay'
 import EmptyState from '../../components/EmptyState/EmptyState'
@@ -27,13 +28,26 @@ function NotFoundIcon() {
   )
 }
 
-export default function FundDetail() {
+const toOrderTime = (order) => {
+  if ((order?.createdAt ?? 0) > 0) return order.createdAt
+  if (order?.tradeDate) {
+    const t = Date.parse(`${order.tradeDate}T00:00:00Z`)
+    if (!Number.isNaN(t)) return t
+  }
+  return 0
+}
+
+export default function FundDetail({ sseEventCount = 0 }) {
   const { fundId } = useParams()
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const accountID = user?.accountID
 
-  const { data: fundsData, loading: fundsLoading } = useFetch(getFunds, [])
+  const { data: fundsData, loading: fundsLoading } = useFetch(
+    () => getFunds(accountID), [accountID, sseEventCount]
+  )
   const { data: ordersData, loading: ordersLoading } = useFetch(
-    () => getOrders({ fundID: fundId }), [fundId]
+    () => getOrders({ fundID: fundId, accountID }), [fundId, accountID, sseEventCount]
   )
 
   const fund = useMemo(() => {
@@ -43,7 +57,9 @@ export default function FundDetail() {
 
   const recentOrders = useMemo(() => {
     if (!ordersData) return []
-    return [...ordersData].sort((a, b) => b.orderID?.localeCompare(a.orderID)).slice(0, 5)
+    return [...ordersData]
+      .sort((a, b) => toOrderTime(b) - toOrderTime(a))
+      .slice(0, 5)
   }, [ordersData])
 
   const loading = fundsLoading || ordersLoading

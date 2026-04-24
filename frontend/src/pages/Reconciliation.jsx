@@ -143,10 +143,10 @@ export default function Reconciliation() {
                         />
                         Show resolved
                     </label>
-                    <button className="recon-refresh-btn" onClick={() => exportToCsv('reconciliation_breaks.csv', breaks)} disabled={breaks.length === 0}>
+                    <button className="btn btn-primary" onClick={() => exportToCsv('reconciliation_breaks.csv', breaks)} disabled={breaks.length === 0}>
                         ⤓ Export CSV
                     </button>
-                    <button className="recon-refresh-btn" onClick={fetchBreaks}>
+                    <button className="btn btn-outline" onClick={fetchBreaks}>
                         ↻ Refresh
                     </button>
                 </div>

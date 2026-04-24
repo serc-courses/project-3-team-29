@@ -51,6 +51,15 @@ function NoOrdersIcon() {
   )
 }
 
+const toOrderTime = (order) => {
+  if ((order?.createdAt ?? 0) > 0) return order.createdAt
+  if (order?.tradeDate) {
+    const t = Date.parse(`${order.tradeDate}T00:00:00Z`)
+    if (!Number.isNaN(t)) return t
+  }
+  return 0
+}
+
 export default function Home({ sseEventCount = 0 }) {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -86,7 +95,7 @@ export default function Home({ sseEventCount = 0 }) {
   }, [orders])
 
   const recentOrders = useMemo(() =>
-    [...orders].sort((a, b) => b.orderID?.localeCompare(a.orderID)).slice(0, 5),
+    [...orders].sort((a, b) => toOrderTime(b) - toOrderTime(a)).slice(0, 5),
   [orders])
 
   const portfolioDonutData = useMemo(() =>

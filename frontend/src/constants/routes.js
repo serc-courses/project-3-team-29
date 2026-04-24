@@ -7,7 +7,6 @@ export const ROUTES = {
   ACCOUNTS: '/accounts',
   USERS: '/users',
   RECONCILIATION: '/reconciliation',
-  PORTFOLIO: '/portfolio',
 };
 
 export const NAV_ITEMS = [
@@ -18,5 +17,4 @@ export const NAV_ITEMS = [
   { label: 'Aggregate Accounts', path: ROUTES.ACCOUNTS, icon: 'accounts' },
   { label: 'Users', path: ROUTES.USERS, icon: 'users' },
   { label: 'Reconciliation', path: ROUTES.RECONCILIATION, icon: 'reconciliation' },
-  { label: 'Portfolio P/L', path: ROUTES.PORTFOLIO, icon: 'portfolio' },
 ];

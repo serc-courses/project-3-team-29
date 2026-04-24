@@ -50,8 +50,8 @@ function AppContent() {
           <Route path="/orders/new" element={<ProtectedRoute><PlaceOrder /></ProtectedRoute>} />
           <Route path="/orders/:orderId" element={<ProtectedRoute><OrderDetail sseEventCount={eventCount} /></ProtectedRoute>} />
           <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
-          <Route path="/funds" element={<ProtectedRoute><Funds /></ProtectedRoute>} />
-          <Route path="/funds/:fundId" element={<ProtectedRoute><FundDetail /></ProtectedRoute>} />
+          <Route path="/funds" element={<ProtectedRoute><Funds sseEventCount={eventCount} /></ProtectedRoute>} />
+          <Route path="/funds/:fundId" element={<ProtectedRoute><FundDetail sseEventCount={eventCount} /></ProtectedRoute>} />
           <Route path="/portfolio" element={<ProtectedRoute><Portfolio sseEventCount={eventCount} /></ProtectedRoute>} />
           <Route path="/account" element={<ProtectedRoute><Account /></ProtectedRoute>} />
 

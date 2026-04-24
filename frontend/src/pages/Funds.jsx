@@ -125,7 +125,7 @@ export default function Funds() {
                     title="Change NAV"
                     onClick={(e) => openNavModal(fund, e)}
                   >
-                    ✏️
+                    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true"><path d="M9.5 1.5L11.5 3.5L4.5 10.5L2 11L2.5 8.5L9.5 1.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   </button>
                 </div>
 

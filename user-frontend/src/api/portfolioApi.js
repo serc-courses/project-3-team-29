@@ -1,9 +1,10 @@
 import { api } from './client'
 
-export async function getFunds() {
+export async function getFunds(accountID) {
+  const qs = accountID ? `?accountID=${encodeURIComponent(accountID)}` : ''
   const [funds, aggregates] = await Promise.all([
     api.get('/funds'),
-    api.get('/view/aggregates/funds').catch(() => []),
+    api.get(`/view/aggregates/funds${qs}`).catch(() => []),
   ])
   const aggMap = {}
   for (const agg of (aggregates || [])) {

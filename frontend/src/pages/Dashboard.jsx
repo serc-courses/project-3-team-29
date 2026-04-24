@@ -100,6 +100,15 @@ function NoData({ height = 200 }) {
   )
 }
 
+const toOrderTime = (order) => {
+  if ((order?.createdAt ?? 0) > 0) return order.createdAt
+  if (order?.tradeDate) {
+    const t = Date.parse(`${order.tradeDate}T00:00:00Z`)
+    if (!Number.isNaN(t)) return t
+  }
+  return 0
+}
+
 /* ─── Page ───────────────────────────────────────────────────────────────────── */
 export default function Dashboard({ sseEventCount }) {
   const { data, loading, error } = useFetch(getDashboard, [sseEventCount])
@@ -109,7 +118,7 @@ export default function Dashboard({ sseEventCount }) {
   const bulkOrdersByStatus = useMemo(() => data?.bulkOrdersByStatus || {}, [data])
 
   const recentOrders = useMemo(() =>
-    [...orders].sort((a, b) => (b.orderID > a.orderID ? 1 : -1)).slice(0, 10),
+    [...orders].sort((a, b) => toOrderTime(b) - toOrderTime(a)).slice(0, 10),
   [orders])
 
   /* BUY vs SELL pie */

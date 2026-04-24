@@ -33,6 +33,15 @@ const COLUMNS = [
   { key: 'orderStatus', label: 'Status', align: 'center', render: (v) => <StatusBadge status={v} /> },
 ]
 
+const toOrderTime = (order) => {
+  if ((order?.createdAt ?? 0) > 0) return order.createdAt
+  if (order?.tradeDate) {
+    const t = Date.parse(`${order.tradeDate}T00:00:00Z`)
+    if (!Number.isNaN(t)) return t
+  }
+  return 0
+}
+
 function Field({ label, value, mono }) {
   return (
     <div className="drawer-field">
@@ -149,7 +158,7 @@ export default function Orders({ sseEventCount = 0 }) {
       if (fundFilter && o.fundID !== fundFilter) return false
       if (search && !o.orderID?.toLowerCase().includes(search.toLowerCase())) return false
       return true
-    }).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+    }).sort((a, b) => toOrderTime(b) - toOrderTime(a))
   }, [orders, statusFilter, accountFilter, sideFilter, fundFilter, search])
 
   if (loading) {
